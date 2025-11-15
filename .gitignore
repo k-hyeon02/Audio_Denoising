@@ -1,0 +1,7 @@
+# macOS trash files
+.DS_Store
+
+# Audio dataset ignore
+data/
+datasets/
+LibriSpeech/
