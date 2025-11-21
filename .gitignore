@@ -3,3 +3,4 @@
 
 # Audio dataset ignore
 data/
+__pycache__/
