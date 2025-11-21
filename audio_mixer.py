@@ -2,15 +2,18 @@ import torch
 import torchaudio
 import random
 
+# sampling rate = 16000Hz : 1초에 16000번 녹음
+# 1번 녹음하는데 걸리는 시간 = 1/16000초
+# 160 간격 = 0.01초 = 10ms
+# target frame = 256 : 스펙토그램의 가로축을 2.55초, 256칸으로 만들기 위함 -> 학습 데이터 규격 통일
 
 class AudioMixer:
-    def __init__(self, sr=16000, snr_range_db=(0, 15)):
+    def __init__(self, sr=16000, target_frame=256, hop_length=160):
         self.sr = sr
-        self.snr_min = snr_range_db[0]
-        self.snr_max = snr_range_db[1]
+        self.target_samples = (target_frame-1) * hop_length  # 2.55초 오디오 = 40,800 샘플 -> 256 프레임
         self.resamplers = {}
 
-    def preprocess_waveform(self, waveform, orig_sr):  # sampling_rate, 채널 수 통일
+    def _preprocess_waveform(self, waveform, orig_sr):  # sampling_rate, 채널 수 통일
         if orig_sr != self.sr:
             if orig_sr not in self.resamplers:
                 self.resamplers[orig_sr] = torchaudio.transforms.Resample(
@@ -23,22 +26,29 @@ class AudioMixer:
 
         return waveform
 
-    def _match_lengths(self, clean_wave, noise):
-        clean_len = clean_wave.shape[-1]
-        noise_len = noise.shape[-1]
+    def _prepare_segment(self, waveform, is_noise=False):
+        '''
+        2.55초 보다 짧은 오디오 파일은 zero padding
+        2.55초 보다 긴 오디오는 랜덤으로 2.55초 구간 선택
+        노이즈 오디오 ??
+        '''
+        current_len = waveform.shape[-1]
+        target_len = self.target_samples
 
-        if clean_len > noise_len:  # 노이즈가 더 짧으면: 반복
-            repeat_factor = clean_len // noise_len + 1
-            # torch.cat을 사용하여 [noise, noise, noise] 형태로 이어붙임
-            noise = torch.cat([noise] * repeat_factor, dim=-1)
-            # 정확한 길이로 자르기
-            noise = noise[..., :clean_len]
+        if current_len > self.target_samples:
+            start = random.randint(0, current_len - self.target_samples)
+            waveform = waveform[..., start : start + self.target_samples]
 
-        elif noise_len > clean_len:  # 노이즈가 더 길면: 무작위로 자르기
-            start_idx = random.randint(0, noise_len - clean_len)
-            noise = noise[..., start_idx : start_idx + clean_len]
+        elif current_len < target_len:
+            if is_noise:  # 노이즈는 반복
+                repeat_factor = target_len // current_len + 1
+                waveform = torch.cat([waveform] * repeat_factor, dim=1)
+                waveform = waveform[..., :target_len]  # 2.55s 넘어가는 부분 자름
+            else:
+                pad_amount = target_len - current_len
+                waveform = torch.nn.functional.pad(waveform, (0, pad_amount))
 
-        return clean_wave, noise  # 길이가 같은 경우
+        return waveform
 
     def _calculate_alpha(self, clean_wave, noise, target_snr_db):
         # 전력(Power) = (진폭 제곱의 평균) + 1e-9 (0으로 나누기 방지)
@@ -53,25 +63,27 @@ class AudioMixer:
 
         return alpha
 
-    def mix(self, clean_wave, noise_wave, target_snr_db=None):
+    def mix(self, clean_wave, noise_wave, clean_rate, noise_rate, snr_db):
 
-        # 1. 오디오 길이 맞추기 (깨끗한 오디오 기준)
-        clean_wave, noise_wave = self._match_lengths(clean_wave, noise_wave)
+        # 1. 전처리 (sampling rate, 채널 수 통일)
+        clean_wave = self._preprocess_waveform(clean_wave, clean_rate)
+        noise_wave = self._preprocess_waveform(noise_wave, noise_rate)
 
-        # 2. SNR 값 결정
-        if target_snr_db is None:
-            used_snr_db = random.uniform(self.snr_min, self.snr_max)  # 무작위 SNR 선택
-        else:
-            used_snr_db = target_snr_db
+        # 2. 규격화 (40,800 samples)
+        clean_segment = self._prepare_segment(clean_wave, is_noise=False)
+        noise_segment = self._prepare_segment(noise_wave, is_noise=True)
 
         # 3. 노이즈 스케일링 팩터(alpha) 계산
-        alpha = self._calculate_alpha(clean_wave, noise_wave, used_snr_db)
+        P_clean = torch.mean(clean_segment**2) + 1e-9
+        P_noise = torch.mean(noise_segment**2) + 1e-9
 
-        # 4. 노이즈 볼륨 조절 및 믹싱
-        scaled_noise = alpha * noise_wave
-        mixed_audio = clean_wave + scaled_noise
+        target_ratio = 10 ** (snr_db/10)
+        alpha = torch.sqrt(P_clean / (P_noise * target_ratio))
 
-        return mixed_audio, clean_wave, used_snr_db
+        # 4. 중첩
+        mixed_wave = clean_segment + (alpha * noise_segment)
+
+        return mixed_wave, clean_segment
 
 
 if __name__ == "__main__":
@@ -80,17 +92,23 @@ if __name__ == "__main__":
 
     clean_wave, clean_rate = torchaudio.load(clean_path)
 
-    noise_path = "./data/noise_datasets/urbansound8k/audio/fold1/7061-6-0-0.wav"
+    noise_path = "./data/noise_datasets/audio/fold1/7061-6-0-0.wav"
     noise_wave, noise_rate = torchaudio.load(noise_path)
 
     # 2. AudioMixer 인스턴스 생성
-    mixer = AudioMixer(sr=16000, snr_range_db=(0, 15))
+    mixer = AudioMixer(sr=16000, target_frame=256, hop_length=160)
 
-    # 3. noise 전처리
-    noise_wave = mixer.preprocess_waveform(noise_wave, noise_rate)
+    # 3. 믹싱
+    test_snr = random.uniform(0, 15)
 
-    # 4. 믹싱
-    mixed_audio, clean_wave, snr_used = mixer.mix(
-        clean_wave,
-        noise_wave,
+    mixed_audio, clean_segment = mixer.mix(
+        clean_wave, noise_wave,
+        clean_rate, noise_rate,
+        snr_db=test_snr
     )
+
+    print(f"Input Clean Shape: {clean_wave.shape}")
+    print(f"Input Noise Shape: {noise_wave.shape}")
+    print(f"Output Mixed Shape: {mixed_audio.shape}")  # (1, 40800) 나와야 성공
+    print(f"Output Target Shape: {clean_segment.shape}")  # (1, 40800) 나와야 성공
+    print(f"Applied SNR: {test_snr:.2f} dB")
