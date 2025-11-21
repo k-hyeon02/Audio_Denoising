@@ -3,5 +3,3 @@
 
 # Audio dataset ignore
 data/
-datasets/
-LibriSpeech/
