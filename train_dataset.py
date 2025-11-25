@@ -45,11 +45,11 @@ class NoiseRemovalDataset(Dataset):
 
         # 4. 스펙트로그램 변환
         # 결과: (1, 256, 256) 텐서
-        mixed_spec = self.spec_processor.to_spec(mixed_wave)
-        clean_spec = self.spec_processor.to_spec(clean_target_wave)
+        mixed_spec, mixed_phase = self.spec_processor.to_spec(mixed_wave)
+        clean_spec, _ = self.spec_processor.to_spec(clean_target_wave)
 
         # 5. 모델 입력/정답 반환
-        return mixed_spec, clean_spec
+        return mixed_spec, clean_spec, mixed_phase
 
 
 if __name__ == "__main__":
