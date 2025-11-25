@@ -13,17 +13,24 @@ class Spectrogram:
         self.n_fft = n_fft
         self.hop_length = hop_length
 
-        self.spec_transform = T.Spectrogram(n_fft=n_fft, hop_length=hop_length)
+        self.spec_transform = T.Spectrogram(n_fft=n_fft, hop_length=hop_length, power=None)
         self.melspec_transform = T.MelSpectrogram(n_fft=n_fft, hop_length=hop_length)
 
         self.amplitude_to_dB = T.AmplitudeToDB(stype="power")
 
     def to_spec(self, waveform):
         spec = self.spec_transform(waveform)
-        dB_spec = self.amplitude_to_dB(spec)
+
+        # 진폭 추출 및 dB 변환
+        magnitude = spec.abs()
+        power = magnitude ** 2
+        dB_spec = self.amplitude_to_dB(power)
         dB_spec = dB_spec[..., :-1, :]  # 세로축(주파수)를 257 -> 256 : 짝수로 맞추기 위해 가장 높은 주파수 bin 하나 제거
 
-        return dB_spec
+        phase = spec.angle()
+        phase = phase[..., :-1, :]
+
+        return dB_spec, phase
 
     def to_melspec(self, waveform):
         melspec = self.melspec_transform(waveform)
