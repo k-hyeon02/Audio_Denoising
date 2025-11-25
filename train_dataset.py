@@ -20,7 +20,7 @@ class NoiseRemovalDataset(Dataset):
 
         # 도구(Tools) 초기화
         self.mixer = AudioMixer(target_frame=target_frame, hop_length=hop_length)
-        self.processor = Spectrogram(n_fft=512, hop_length=hop_length)
+        self.spec_processor = Spectrogram(n_fft=512, hop_length=hop_length)
 
     def __len__(self):
         # 전체 학습 데이터 수 (클린 파일 개수 기준)
@@ -45,8 +45,8 @@ class NoiseRemovalDataset(Dataset):
 
         # 4. 스펙트로그램 변환
         # 결과: (1, 256, 256) 텐서
-        mixed_spec = self.processor.to_spec(mixed_wave)
-        clean_spec = self.processor.to_spec(clean_target_wave)
+        mixed_spec = self.spec_processor.to_spec(mixed_wave)
+        clean_spec = self.spec_processor.to_spec(clean_target_wave)
 
         # 5. 모델 입력/정답 반환
         return mixed_spec, clean_spec
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     try:
         # 2. 데이터셋 인스턴스 생성
         dataset = NoiseRemovalDataset(clean_dir, noise_dir)
-        print(f"✅ 데이터셋 생성 완료! 총 데이터 수: {len(dataset)}개")
+        print(f"총 데이터 수: {len(dataset)}개")
 
         # 3. 데이터 로더 연결 (배치 테스트)
         # 배치 사이즈 4로 설정하여 4개씩 묶어서 나오는지 확인
@@ -74,7 +74,7 @@ if __name__ == "__main__":
         mixed_batch, clean_batch = next(iter(loader))
 
         # 5. 차원(Shape) 검증
-        print("\n--- [1] 차원(Shape) 검증 ---")
+        print("\n--- 차원(Shape) 검증 ---")
         print(f"Mixed Batch Shape: {mixed_batch.shape}")
         print(f"Clean Batch Shape: {clean_batch.shape}")
 
@@ -86,8 +86,7 @@ if __name__ == "__main__":
             print(f"Testing Dimensions... FAIL (기대값: {expected_shape})")
 
         # 6. 시각적(Visual) 검증
-        print("\n--- [2] 시각적 검증 (첫 번째 샘플) ---")
-        import librosa.display  # 라이브러리 임포트 필요
+        print("\n--- 시각적 검증 (첫 번째 샘플) ---")
 
         # 배치 중 첫 번째 데이터만 꺼내서 그리기
         mixed_sample = mixed_batch[0].squeeze().numpy()  # (256, 256)
@@ -95,7 +94,6 @@ if __name__ == "__main__":
 
         plt.figure(figsize=(12, 5))
 
-        # [수정] plt.imshow 대신 librosa.display.specshow 사용
         plt.subplot(1, 2, 1)
         plt.title("Mixed Input (Noisy)")
         librosa.display.specshow(
@@ -124,5 +122,4 @@ if __name__ == "__main__":
         plt.show()
 
     except Exception as e:
-        print(f"\n❌ 에러 발생: {e}")
-        print("파일 경로가 정확한지, 데이터가 해당 폴더에 있는지 확인해주세요.")
+        print(f"\n에러 : {e}")
