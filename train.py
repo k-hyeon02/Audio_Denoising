@@ -3,13 +3,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm  # 진행률 표시바
-import os  
+import os
 
-# PYTORCH_ENABLE_MPS_FALLBACK 환경 변수를 1로 설정합니다.
-# 이렇게 하면 angle()처럼 지원 안 되는 연산은 CPU로 자동 전환됩니다.
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-
-from spectrogram import Spectrogram
+# 우리가 만든 모듈들 임포트
 from train_dataset import NoiseRemovalDataset
 from unet import UNetDenoise
 
@@ -58,8 +54,6 @@ def train():
     )
     print(f"✅ 총 데이터 개수: {len(train_dataset)}")
 
-    spec_converter = Spectrogram().to(device)
-
     # 3. 모델, 손실함수, 옵티마이저 준비
     model = UNetDenoise().to(device)
 
@@ -95,18 +89,14 @@ def train():
         # tqdm으로 진행률 바 표시
         loop = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{EPOCHS}]")
 
-        for batch_idx, (mixed_wave, clean_wave) in enumerate(loop):
+        for batch_idx, (mixed_spec, clean_spec, _) in enumerate(loop):
             # mixed_spec: 입력 (노이즈 낌)
             # clean_spec: 정답 (깨끗함)
             # _: 위상 정보는 학습 때는 필요 없음 (복원 때만 사용)
 
             # 데이터를 GPU(MPS)로 이동
-            mixed_wave = mixed_wave.to(device)
-            clean_wave = clean_wave.to(device)
-
-            with torch.no_grad():
-                mixed_spec,_ = spec_converter.to_spec(mixed_wave)
-                clean_spec,_ = spec_converter.to_spec(clean_wave)
+            mixed_spec = mixed_spec.to(device)
+            clean_spec = clean_spec.to(device)
 
             # --- Forward Pass (예측) ---
             predictions = model(mixed_spec)
