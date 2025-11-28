@@ -5,7 +5,7 @@ import random
 import os
 
 from audio_mixer import AudioMixer
-from spectrogram import Spectrogram
+# from spectrogram import Spectrogram
 
 class NoiseRemovalDataset(Dataset):
     def __init__(self, clean_dir, noise_dir, target_frame=256, hop_length=160):
@@ -20,7 +20,7 @@ class NoiseRemovalDataset(Dataset):
 
         # 도구(Tools) 초기화
         self.mixer = AudioMixer(target_frame=target_frame, hop_length=hop_length)
-        self.spec_processor = Spectrogram(n_fft=512, hop_length=hop_length)
+        # self.spec_processor = Spectrogram(n_fft=512, hop_length=hop_length)
 
     def __len__(self):
         # 전체 학습 데이터 수 (클린 파일 개수 기준)
@@ -45,11 +45,11 @@ class NoiseRemovalDataset(Dataset):
 
         # 4. 스펙트로그램 변환
         # 결과: (1, 256, 256) 텐서
-        mixed_spec, mixed_phase = self.spec_processor.to_spec(mixed_wave)
-        clean_spec, _ = self.spec_processor.to_spec(clean_target_wave)
+        # mixed_wave, mixed_phase = self.spec_processor.to_spec(mixed_wave)
+        # clean_wave, _ = self.spec_processor.to_spec(clean_target_wave)
 
         # 5. 모델 입력/정답 반환
-        return mixed_spec, clean_spec, mixed_phase
+        return mixed_wave, clean_wave
 
 
 if __name__ == "__main__":
