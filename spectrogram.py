@@ -14,7 +14,6 @@ class Spectrogram:
         self.hop_length = hop_length
 
         self.spec_transform = T.Spectrogram(n_fft=n_fft, hop_length=hop_length, power=None)
-        self.melspec_transform = T.MelSpectrogram(n_fft=n_fft, hop_length=hop_length)
 
         self.amplitude_to_dB = T.AmplitudeToDB(stype="power")
 
