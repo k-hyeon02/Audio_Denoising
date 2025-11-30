@@ -1,7 +1,7 @@
 import torch
 
 
-def im2col(x, kernel_h, kernel_w, padding=1, stride=1):
+def im2col(x, kernel_h, kernel_w, stride=1, padding=1):
     N, C, H, W = x.shape
 
     # 1. 패딩 및 출력 크기 계산
