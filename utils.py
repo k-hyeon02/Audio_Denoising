@@ -4,7 +4,7 @@ import torch
 def im2col(x, kernel_h, kernel_w, padding=1, stride=1):
     N, C, H, W = x.shape
 
-    # 1. 패딩 및 출력 크기 계산 
+    # 1. 패딩 및 출력 크기 계산
     x_padded = torch.nn.functional.pad(
         x, (padding, padding, padding, padding), mode="constant", value=0
     )
@@ -27,13 +27,13 @@ def im2col(x, kernel_h, kernel_w, padding=1, stride=1):
 
     # start_h (세로 시작점):
     # 가로로 훑는 동안(Inner Loop)은 h좌표가 고정되어야 함 -> [0, 0, ..., 0, stride, stride, ...]
-    # 형태: (out_h, 1) -> 가로(out_w)로 복사
+    # 형태: (out_h, 1) -> 가로로 out_w 만큼 복사
     start_h = torch.arange(out_h) * stride
     start_h = start_h.reshape(-1, 1).repeat(1, out_w).reshape(-1)
 
     # start_w (가로 시작점):
     # 가로로 훑는 동안 계속 변해야 함 -> [0, stride, 2*stride, ...]
-    # 형태: (1, out_w) -> 세로(out_h)로 복사
+    # 형태: (1, out_w) -> 세로로 out_h 만큼 복사
     start_w = torch.arange(out_w) * stride
     start_w = start_w.reshape(1, -1).repeat(out_h, 1).reshape(-1)
 
@@ -50,4 +50,3 @@ def im2col(x, kernel_h, kernel_w, padding=1, stride=1):
     cols = x_padded[:, c_idx, h_idx, w_idx]
 
     return cols
-
