@@ -1,3 +1,5 @@
+import numpy as np
+
 # im2col
 def im2col(input_data, filter_h, filter_w, stride=1,  pad=0):
     """
