@@ -30,7 +30,6 @@ class AudioMixer:
         '''
         2.55초 보다 짧은 오디오 파일은 zero padding
         2.55초 보다 긴 오디오는 랜덤으로 2.55초 구간 선택
-        노이즈 오디오 ??
         '''
         current_len = waveform.shape[-1]
         target_len = self.target_samples

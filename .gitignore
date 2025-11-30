@@ -3,4 +3,5 @@
 
 # Audio dataset ignore
 data/
-__pycache__/
+__pycache__
+발표/
