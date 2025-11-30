@@ -26,7 +26,7 @@ def im2col(x, kernel_h, kernel_w, padding=1, stride=1):
     # 3. 윈도우 시작점(Global) 좌표: (start_h, start_w)
 
     # start_h (세로 시작점):
-    # 가로로 훑는 동안(Inner Loop)은 y좌표가 고정되어야 함 -> [0, 0, ..., 0, stride, stride, ...]
+    # 가로로 훑는 동안(Inner Loop)은 h좌표가 고정되어야 함 -> [0, 0, ..., 0, stride, stride, ...]
     # 형태: (out_h, 1) -> 가로(out_w)로 복사
     start_h = torch.arange(out_h) * stride
     start_h = start_h.reshape(-1, 1).repeat(1, out_w).reshape(-1)
