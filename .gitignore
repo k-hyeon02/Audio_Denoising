@@ -6,3 +6,4 @@ data/
 __pycache__
 발표/
 checkpoints/
+*.npy
