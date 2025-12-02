@@ -7,6 +7,4 @@ saved/
 __pycache__
 발표/
 checkpoints/
-cnn/
-test/.npy
-test/test(img2cnn).py
+*.npy
