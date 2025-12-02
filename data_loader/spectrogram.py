@@ -4,7 +4,7 @@ import torchaudio.transforms as T
 import librosa
 import random
 import matplotlib.pyplot as plt
-from audio_mixer import AudioMixer
+from data_loader.audio_mixer import AudioMixer
 
 # 16000Hz에서 25ms = 400 < 512 = n_fft 로 설정
 # 이동 간격 : hop_length = 160 : 16000Hz에서 10ms, 데이터 길이가 40,800이므로 총 0~255 프레임의 시간축 생성

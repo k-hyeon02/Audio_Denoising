@@ -1,5 +1,5 @@
 import torch
-from utils import im2col, col2im
+from core.utils import im2col, col2im
 
 # ex) (1, 1, 256, 256), stride = 1, pad = 1
 class Conv2d:
