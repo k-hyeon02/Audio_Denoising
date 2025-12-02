@@ -3,7 +3,6 @@
 
 # Audio dataset ignore
 data/
-saved/
 __pycache__
 발표/
 checkpoints/

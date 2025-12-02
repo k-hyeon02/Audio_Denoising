@@ -6,9 +6,7 @@
 - `parts.py`: DoubleConv, Down, Up 등 U-Net의 구성 요소 블록
 - `unet.py`: 전체 U-Net 모델 조립 (`parts.py` 활용)
 
-### `data/`
-- 데이터 로딩 파이프라인을 담당합니다.
-- `dataset.py`: 
+### 'dataloader.py'
 
 ### `trainer/`
 - 실제 학습 루프(Loop)를 관리합니다.
