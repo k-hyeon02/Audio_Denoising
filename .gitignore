@@ -3,4 +3,9 @@
 
 # Audio dataset ignore
 data/
-__pycache__/
+__pycache__
+발표/
+checkpoints/
+cnn/
+test/.npy
+test/test(img2cnn).py

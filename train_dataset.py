@@ -29,7 +29,7 @@ class NoiseRemovalDataset(Dataset):
     def __getitem__(self, idx):
         # 1. 파일 로드 및 메타데이터 획득
         clean_path = self.clean_files[idx]
-        noise_path = random.choice(self.noise_files)  # 노이즈는 랜덤 선택 (데이터 증강)
+        noise_path = random.choice(self.noise_files)  # 노이즈는 랜덤 선택
 
         clean_wave, clean_sr = torchaudio.load(clean_path)
         noise_wave, noise_sr = torchaudio.load(noise_path)
@@ -71,7 +71,7 @@ if __name__ == "__main__":
         loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
         # 4. 첫 번째 배치 추출 (Iterate)
-        mixed_batch, clean_batch = next(iter(loader))
+        mixed_batch, clean_batch, _ = next(iter(loader))
 
         # 5. 차원(Shape) 검증
         print("\n--- 차원(Shape) 검증 ---")
@@ -101,8 +101,8 @@ if __name__ == "__main__":
             sr=16000,
             hop_length=160,
             x_axis="time",
-            y_axis="linear", 
-            cmap="magma",
+            y_axis="linear",
+            cmap='coolwarm'
         )
         plt.colorbar(format="%+2.0f dB")
 
@@ -114,7 +114,7 @@ if __name__ == "__main__":
             hop_length=160,
             x_axis="time",
             y_axis="linear",
-            cmap="magma",
+            cmap='coolwarm'
         )
         plt.colorbar(format="%+2.0f dB")
 
