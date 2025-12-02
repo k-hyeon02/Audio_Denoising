@@ -4,15 +4,9 @@ import torch
 def im2col(x, filter_h, filter_w, stride=1, pad=1):
     N, C, H, W = x.shape
 
-<<<<<<< HEAD
-    # 1. 패딩 및 출력 크기 계산 
-    x_padded = torch.nn.functional.pad(
-        x, (padding, padding, padding, padding), mode="constant", value=0
-=======
     # 1. 패딩 및 출력 크기 계산
     img = torch.nn.functional.pad(
         x, (pad, pad, pad, pad), mode="constant", value=0
->>>>>>> ec24e95a (append col2im)
     )
     out_h = (H + 2 * pad - filter_h) // stride + 1
     out_w = (W + 2 * pad - filter_w) // stride + 1
@@ -34,23 +28,15 @@ def im2col(x, filter_h, filter_w, stride=1, pad=1):
 
     # start_h (세로 시작점):
     # 가로로 훑는 동안(Inner Loop)은 h좌표가 고정되어야 함 -> [0, 0, ..., 0, stride, stride, ...]
-<<<<<<< HEAD
-    # 형태: (out_h, 1) -> 가로(out_w)로 복사
-=======
     # 형태: (out_h, 1) -> 가로로 out_w 만큼 복사
     # shape : (out_h * out_w,)
->>>>>>> ec24e95a (append col2im)
     start_h = torch.arange(out_h) * stride
     start_h = start_h.reshape(-1, 1).repeat(1, out_w).reshape(-1)  
 
     # start_w (가로 시작점):
     # 가로로 훑는 동안 계속 변해야 함 -> [0, stride, 2*stride, ...]
-<<<<<<< HEAD
-    # 형태: (1, out_w) -> 세로(out_h)로 복사
-=======
     # 형태: (1, out_w) -> 세로로 out_h 만큼 복사
     # shape : (out_h * out_w,)
->>>>>>> ec24e95a (append col2im)
     start_w = torch.arange(out_w) * stride
     start_w = start_w.reshape(1, -1).repeat(out_h, 1).reshape(-1) 
 
@@ -68,10 +54,6 @@ def im2col(x, filter_h, filter_w, stride=1, pad=1):
     # shape = (N, C * filter_h * filter_w, out_h * out_w)
     col = img[:, c_idx, h_idx, w_idx]
 
-<<<<<<< HEAD
-    return cols
-
-=======
     return col
 
 
@@ -103,4 +85,3 @@ def col2im(col, input_shape, filter_h, filter_w, stride=1, pad=1):
             img[:, :, y:y_max:stride, x:x_max:stride] += col[:, :, y, x, :, :]
 
     return img[:, :, pad : H+pad, pad : W+pad]
->>>>>>> ec24e95a (append col2im)
