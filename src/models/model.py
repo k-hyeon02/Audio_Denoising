@@ -1,4 +1,4 @@
-# doubleconv, unet, test 정의
+# UNet, test 정의
 
 import torch
 from models.components.module import Module
