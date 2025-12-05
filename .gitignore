@@ -6,4 +6,4 @@ data/
 __pycache__
 발표/
 *.npy
-/experiments
+/checkpoints

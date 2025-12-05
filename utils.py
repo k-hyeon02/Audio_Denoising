@@ -1,6 +1,5 @@
 import torch
 
-
 def im2col(x, filter_h, filter_w, stride=1, pad=1):
     N, C, H, W = x.shape
 
@@ -54,12 +53,17 @@ def im2col(x, filter_h, filter_w, stride=1, pad=1):
     # shape = (N, C * filter_h * filter_w, out_h * out_w)
     col = img[:, c_idx, h_idx, w_idx]
 
+    # reshape :
+    # (N, C * filter_h * filter_w, out_h * out_w)
+    # -> (N * out_h * out_w, C * filter_h * filter_w)
+    col = col.permute(0, 2, 1).reshape(N * out_h * out_w, -1)
+
     return col
 
 
 def col2im(col, input_shape, filter_h, filter_w, stride=1, pad=1):
     """
-    col: (N, C * filter_h * filter_w, out_h * out_w)
+    col: (N * out_h * out_w, C * filter_h * filter_w)
     input_shape: (N, C, H, W) - 복원할 입력 이미지의 크기
     """
     N, C, H, W = input_shape
@@ -71,6 +75,7 @@ def col2im(col, input_shape, filter_h, filter_w, stride=1, pad=1):
     # 2. 텐서 모양 복구 (Reshape)
     # 입력된 평평한 col를 (N, C, filter_h, filtier_w, out_h, oout_w) 형태로 다시 복원
     # im2col 출력 형태를 고려하여 reshape
+    col = col.reshape(N, out_h * out_w, -1).permute(0, 2, 1)
     col = col.reshape(N, C, filter_h, filter_w, out_h, out_w)
 
     # 3. 빈 캔버스 생성 (패딩이 포함된 크기)

@@ -4,8 +4,8 @@ import glob
 import random
 import os
 
-from data_loader.audio_mixer import AudioMixer
-from data_loader.spectrogram import Spectrogram
+from train_dataset.audio_mixer import AudioMixer
+from train_dataset.spectrogram import Spectrogram
 
 class NoiseRemovalDataset(Dataset):
     def __init__(self, clean_dir, noise_dir, target_frame=256, hop_length=160):
