@@ -1,4 +1,4 @@
-import numpy as np
+import torch
 
 class Module:
     def __init__(self):
@@ -16,7 +16,7 @@ class Module:
     
     def zero_grad(self):    # 한 루프마다 역전파 전 초기화를 해준다.
         for key in self.grads:
-            self.grads[key] = np.zeros_like(self.grads[key])
+            self.grads[key] = torch.zeros_like(self.grads[key])
     
     def parameters(self):
         """
@@ -59,7 +59,8 @@ class Sequential(Module):
         self.layers = []
 
         for layer in layers:
-            self.layers.append(layer)   
+            self.layers.append(layer) 
+
         
     def forward(self, x):
         for layer in self.layers:
@@ -83,3 +84,4 @@ class ModuleList(Module):
     
     def __getitem__(self, idx):
         return self.modules[idx]
+    
