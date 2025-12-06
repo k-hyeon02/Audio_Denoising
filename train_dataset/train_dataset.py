@@ -4,16 +4,39 @@ import glob
 import random
 import os
 
-from train_dataset.audio_mixer import AudioMixer
-from train_dataset.spectrogram import Spectrogram
+from audio_mixer import AudioMixer
+from spectrogram import Spectrogram
+
 
 class NoiseRemovalDataset(Dataset):
-    def __init__(self, clean_dir, noise_dir, target_frame=256, hop_length=160):
+    def __init__(self, clean_dir, noise_dir, mode='train', split_ratio = 0.8, 
+                 target_frame=256, hop_length=160):
+
+        self.mode = mode
 
         # 모든 파일 경로 리스트업
-        self.clean_files = sorted(
+        all_clean_files = sorted(
             glob.glob(os.path.join(clean_dir, "**/*.flac"), recursive=True)
         )
+        self.noise_files = sorted(
+            glob.glob(os.path.join(noise_dir, "**/*.wav"), recursive=True)
+        )
+
+        # 시드 고정 (항상 같은 순서)
+        random.seed(42)
+        random.shuffle(all_clean_files)
+
+        # 데이터셋 분할
+        split_point = int(len(all_clean_files) * split_ratio)
+
+        if mode == 'train':
+            self.clean_files = all_clean_files[:split_point]  # 앞부분 80%
+        elif mode == 'val':
+            self.clean_files = all_clean_files[split_point:]  # 뒷부분 20%
+        else:
+            print("mode는 'train'/'val' 이어야 함")
+
+        # noise는 전체 공유
         self.noise_files = sorted(
             glob.glob(os.path.join(noise_dir, "**/*.wav"), recursive=True)
         )
@@ -25,6 +48,13 @@ class NoiseRemovalDataset(Dataset):
     def __len__(self):
         # 전체 학습 데이터 수 (클린 파일 개수 기준)
         return len(self.clean_files)
+    
+    def normalize(self, tensor):
+        min_val = tensor.min()
+        max_val = tensor.max()
+
+        norm_tensor = (tensor - min_val) / (max_val - min_val + 1e-8)
+        return norm_tensor
 
     def __getitem__(self, idx):
         # 1. 파일 로드 및 메타데이터 획득
@@ -48,13 +78,17 @@ class NoiseRemovalDataset(Dataset):
         mixed_spec, mixed_phase = self.spec_processor.to_spec(mixed_wave)
         clean_spec, _ = self.spec_processor.to_spec(clean_target_wave)
 
-        # 5. 모델 입력/정답 반환
-        return mixed_spec, clean_spec, mixed_phase
+        # 5. 정규화
+        mixed_spec_norm = self.normalize(mixed_spec)
+        clean_spec_norm = self.normalize(clean_spec)
+
+        # 6. 모델 입력/정답 반환
+        return mixed_spec_norm, clean_spec_norm, mixed_phase
 
 
 if __name__ == "__main__":
-    clean_dir = "./data/LibriSpeech/train-clean-100/"
-    noise_dir = "./data/noise_datasets/audio/"
+    clean_dir = "../data/LibriSpeech/train-clean-100/"
+    noise_dir = "../data/noise_datasets/audio/"
 
     import matplotlib.pyplot as plt
     from torch.utils.data import DataLoader

@@ -4,7 +4,6 @@ import torchaudio.transforms as T
 import librosa
 import random
 import matplotlib.pyplot as plt
-from train_dataset.audio_mixer import AudioMixer
 
 # 16000Hz에서 25ms = 400 < 512 = n_fft 로 설정
 # 이동 간격 : hop_length = 160 : 16000Hz에서 10ms, 데이터 길이가 40,800이므로 총 0~255 프레임의 시간축 생성
@@ -55,6 +54,9 @@ class Spectrogram:
 
 
 if __name__ == "__main__":
+    
+    from train_dataset.audio_mixer import AudioMixer
+
     # 1. 데이터 로드
     clean_path = "./data/LibriSpeech/train-clean-100/19/198/19-198-0000.flac"
 

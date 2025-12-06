@@ -7,3 +7,4 @@ __pycache__
 발표/
 *.npy
 /checkpoints
+/checkpoints_2

@@ -1,4 +1,6 @@
 import torch
+import numpy as np
+import os
 
 def im2col(x, filter_h, filter_w, stride=1, pad=1):
     N, C, H, W = x.shape
@@ -90,3 +92,57 @@ def col2im(col, input_shape, filter_h, filter_w, stride=1, pad=1):
             img[:, :, y:y_max:stride, x:x_max:stride] += col[:, :, y, x, :, :]
 
     return img[:, :, pad : H+pad, pad : W+pad]
+
+
+# 가중치 초기화 함수 (He Initialization)
+def he_init(fan_in, shape):
+    return torch.randn(shape) * np.sqrt(2.0 / fan_in)
+
+
+# 모델 gpu 이동 및 저장
+def move_layer_to_device(layer, device):
+    """레이어 내부의 W, b를 찾아 디바이스로 이동"""
+    # 1. 기본 레이어 (Conv2d, ConvTransposed2d 등)
+    if hasattr(layer, "W") and layer.W is not None:
+        layer.W = layer.W.to(device)
+    if hasattr(layer, "b") and layer.b is not None:
+        layer.b = layer.b.to(device)
+
+    # 2. 중첩 레이어 (DoubleConv)
+    if hasattr(layer, "params"):
+        for sub_layer in layer.params:
+            move_layer_to_device(sub_layer, device)
+
+
+def move_model_to_device(model, device):
+    """UNet 전체 파라미터 이동"""
+    print(f"Moving model to {device}...")
+    for module in model.modules:
+        move_layer_to_device(module, device)
+
+
+# 가중치 저장
+def save_checkpoint(model, save_dir, filename):
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir, exist_ok=True)
+    
+    save_path = os.path.join(save_dir, filename)
+
+    checkpoint = {}
+
+    for i, module in enumerate(model.modules):
+        # DoubleConv 처리
+        if hasattr(module, "params"):
+            for j, sub in enumerate(module.params):
+                checkpoint[f"{i}_{type(module).__name__}_sub{j}"] = {
+                    "W": sub.W.cpu(),
+                    "b": sub.b.cpu(),
+                }
+        # 단일 레이어 처리
+        elif hasattr(module, "W"):
+            checkpoint[f"{i}_{type(module).__name__}"] = {
+                "W": module.W.cpu(),
+                "b": module.b.cpu(),
+            }
+
+    torch.save(checkpoint, save_path)

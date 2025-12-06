@@ -1,5 +1,5 @@
 import torch
-from utils import im2col, col2im
+from utils import *
 
 # ex) (1, 1, 256, 256), stride = 1, pad = 1
 class Conv2d:
@@ -81,14 +81,19 @@ class Conv2d:
         dx = col2im(dcol, self.x_shape, FH, FW, self.stride, self.pad)
 
         return dx
+    
+    def step(self, lr):
+        self.W -= lr * self.dW
+        self.b -= lr * self.db
 
 
 class ConvTransposed2d:
-    def __init__(self, W, b, stride=1, pad=0):
+    def __init__(self, W, b, stride=2, pad=1, output_pad=1):
         self.W = W
         self.b = b
         self.stride = stride
         self.pad = pad
+        self.output_pad = output_pad
 
         # for backward
         self.x = None
@@ -106,13 +111,13 @@ class ConvTransposed2d:
         self.x = x  # for backward
 
         # 출력 크기 계선 (Conv2d의 역연산)
-        out_h = (H - 1) * self.stride - 2 * self.pad + FH
-        out_w = (W - 1) * self.stride - 2 * self.pad + FW
+        out_h = (H - 1) * self.stride - 2 * self.pad + FH + self.output_pad
+        out_w = (W - 1) * self.stride - 2 * self.pad + FW + self.output_pad
         out_shape = (N, FN, out_h, out_w)
 
         # 가중치와 입력 행렬 곱 (Conv2d의 backward 연산)
         # W : (C, FN, FH, FW) -> col_W : (C, FN * FH * FW)
-        col_W = W.reshape(C, -1)
+        col_W = self.W.reshape(C, -1)
 
         # x = (N, C, H, W) -> (N * H * W, C)
         x_flat = x.permute(0,2,3,1).reshape(-1, C)
@@ -124,6 +129,7 @@ class ConvTransposed2d:
 
         # col2im 통해 이미지 형태로 복원
         # out은 이미 col2im의 입력 형태 : (N * H * W, FN * FH * FW)
+        # -> shape : (N, FN ,H ,W)
         out = col2im(out, out_shape, FH, FW, self.stride, self.pad)
 
         # bias 더하기 (broadcasting)
@@ -169,6 +175,10 @@ class ConvTransposed2d:
 
         return dx
 
+    def step(self, lr):
+        self.W -= lr * self.dW
+        self.b -= lr * self.db
+
 
 class LeakyReLU:
     def __init__(self, slope=0.01):
@@ -177,7 +187,7 @@ class LeakyReLU:
 
     def forward(self, x):
         # x가 0이하인 인덱스 저장(True/False)
-        self.mask = x <= 0
+        self.mask = (x <= 0)
         out = x.clone()
         out[self.mask] *= self.slope
 
@@ -193,6 +203,9 @@ class LeakyReLU:
         dx[self.mask] *= self.slope
 
         return dx
+
+    def step(self, lr):
+        pass  # 업데이트할 가중치 X
 
 
 class Concat:
@@ -223,3 +236,80 @@ class Concat:
         dx2 = dout[:, self.split_idx:, :, :]  # split_idx ~ 부터
 
         return dx1, dx2
+
+
+class DoubleConv:
+    """
+    (Conv -> LeakyReLU) * 2 구조를 하나의 레이어
+    """
+
+    def __init__(self, in_ch, out_ch, f_size = 3, mid_ch=None):
+        if mid_ch is None:
+            mid_ch = out_ch
+
+        # 2. He Initialization을 위한 Fan-in 면적 계산
+        # 3x3이면 9, 5x5면 25
+        self.f_area = f_size * f_size
+
+        # 첫 번째 합성곱 (채널 수 변경: in -> mid)
+        self.conv1 = Conv2d(
+            he_init(in_ch * self.f_area, (mid_ch, in_ch, f_size, f_size)),
+            torch.zeros(mid_ch),
+            stride=1,
+            pad=1,
+        )
+        self.act1 = LeakyReLU()
+
+        # 두 번째 합성곱 (채널 수 유지: mid -> out)
+        self.conv2 = Conv2d(
+            he_init(mid_ch * self.f_area, (out_ch, mid_ch, f_size, f_size)),
+            torch.zeros(out_ch),
+            stride=1,
+            pad=1,
+        )
+        self.act2 = LeakyReLU()
+
+        # Optimizer용 파라미터 리스트
+        self.params = [self.conv1, self.conv2]
+
+    def forward(self, x):
+        # x -> Conv1 -> Act1 -> Conv2 -> Act2
+        out = self.conv1.forward(x)
+        out = self.act1.forward(out)
+        out = self.conv2.forward(out)
+        out = self.act2.forward(out)
+        return out
+
+    def backward(self, dout):
+        # 역순으로 전파
+        # Act2 -> Conv2 -> Act1 -> Conv1
+        dout = self.act2.backward(dout)
+        dout = self.conv2.backward(dout)
+        dout = self.act1.backward(dout)
+        dout = self.conv1.backward(dout)
+        return dout
+
+    def step(self, lr):
+        # 내부 컨볼루션 레이어들의 가중치 업데이트
+        self.conv1.step(lr)
+        self.conv2.step(lr)
+
+
+# 손실함수 (MSE)
+class MSELoss:
+    def __init__(self):
+        self.diff = None
+        self.N = None
+
+    def forward(self, y, t):
+        self.diff = y - t
+        self.N = y.numel()  # 전체 요소 개수
+        loss = torch.sum(self.diff ** 2)/self.N
+
+        return loss
+    
+    def backward(self):
+        # MSE 미분 : 2(y - t)/N
+        dout = 2 * self.diff / self.N
+        
+        return dout 
