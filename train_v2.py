@@ -101,7 +101,7 @@ def train():
         avg_train_psnr = train_psnr_sum / len(train_loader)
 
         history['train_loss'].append(avg_train_loss)
-        history['train_psnr'].appen(avg_train_psnr)
+        history['train_psnr'].append(avg_train_psnr)
 
         # [Validation]
         val_loss_sum = 0.0
