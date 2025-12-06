@@ -125,7 +125,7 @@ def move_model_to_device(model, device):
 def save_checkpoint(model, save_dir, filename):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir, exist_ok=True)
-    
+
     save_path = os.path.join(save_dir, filename)
 
     checkpoint = {}
@@ -146,3 +146,15 @@ def save_checkpoint(model, save_dir, filename):
             }
 
     torch.save(checkpoint, save_path)
+
+
+# PSNR 계산 : PSNR = 10 * log10(MAX^2 / MSE)
+def calculate_psnr(output, target):
+    mse = torch.mean((output - target) ** 2)
+    if mse == 0: # 둘이 완전히 똑같으면 무한대
+        return 100.0
+    
+    # 데이터가 0~1 혹은 -1~1로 정규화되어 있다고 가정할 때 MAX=1.0으로 잡는 것이 일반적입니다.
+    max_val = 1.0 
+    psnr = 10 * torch.log10((max_val**2) / mse)
+    return psnr

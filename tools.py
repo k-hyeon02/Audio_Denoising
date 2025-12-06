@@ -8,13 +8,13 @@ class Module:
         self.grads = {}     # 가중치 미분값 저장
         self.cache = None   # forward때 입력값 저장
     
-    def forward(self, x):
+    def forward(self, x):  # 자식 클래스의 forward 사용
         raise NotImplementedError
     
-    def backward(self, dout):
+    def backward(self, dout):  # 자식 클래스의 backward 사용
         raise NotImplementedError
     
-    def zero_grad(self):    # 한 루프마다 역전파 전 초기화를 해준다.
+    def zero_grad(self):    # 이전 배치의 그래디언트 남아있지 않게 초기화
         for key in self.grads:
             self.grads[key] = np.zeros_like(self.grads[key])
     

@@ -59,13 +59,16 @@ def train():
     loss_func = MSELoss()
 
     # 로스 기록
-    history = {'train_loss': [], 'val_loss': []}
+    history = {'train_loss': [], 'val_loss': [],
+               'train_psnr': [], 'val_psnr': []}
 
     # 3. epoch 반복
     for epoch in range(EPOCHS):
 
         # [Train]
         train_loss_sum = 0.0
+        train_psnr_sum = 0.0
+
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS} : [Train]")
 
         for mixed, clean, _ in pbar:
@@ -85,15 +88,25 @@ def train():
             # 가중치 업데이트
             model.step(lr=LR)
 
+            # PSNR 계산
+            psnr = calculate_psnr(y, t)
+
             # 기록
             train_loss_sum += loss.item()
-            pbar.set_postfix({'Loss': f"{loss.item(): .6f}"})
+            train_psnr_sum += psnr.item()
+            pbar.set_postfix({'Loss': f"{loss.item(): .6f}",
+                              'PSNR': f"{psnr.item(): .2f}"})
 
         avg_train_loss = train_loss_sum / len(train_loader)
+        avg_train_psnr = train_psnr_sum / len(train_loader)
+
         history['train_loss'].append(avg_train_loss)
+        history['train_psnr'].appen(avg_train_psnr)
 
         # [Validation]
         val_loss_sum = 0.0
+        val_psnr_sum = 0.0
+
         for mixed, clean, _ in val_loader:
             x = mixed.to(device)
             t = clean.to(device)
@@ -101,13 +114,20 @@ def train():
             # forward
             y = model.forward(x)
             loss = loss_func.forward(y, t)
+            psnr = calculate_psnr(y, t)
 
             val_loss_sum += loss.item()
+            val_psnr_sum += psnr.itme()
 
         avg_val_loss = val_loss_sum / len(val_loader)
-        history['val_loss'].append(avg_val_loss)
+        avg_val_psnr = val_psnr_sum / len(val_loader)
 
-        print(f"Epoch {epoch+1} Result > Train Loss: {avg_train_loss:.6f} | Val Loss: {avg_val_loss:.6f}")
+        history['val_loss'].append(avg_val_loss)
+        history['val_psnr'].append(avg_val_psnr)
+
+        print(f"Epoch {epoch+1} Result > "
+              f"Loss: {avg_train_loss:.6f} (Val: {avg_val_loss:.6f}) | "
+              f"PSNR: {avg_train_psnr:.2f}dB (Val: {avg_val_psnr:.2f}dB)")
 
         # 5 epoch 마다 저장
         if (epoch+1) % 5 == 0:
@@ -125,8 +145,21 @@ def train():
     plt.legend()
     plt.grid(True)
 
-    graph_path = os.path.join(SAVE_DIR, "loss_curve.png")
-    plt.savefig(graph_path)
+    loss_g_path = os.path.join(SAVE_DIR, "loss_curve.png")
+    plt.savefig(loss_g_path)
+    plt.show()
+
+    # 5. PSNR 시각화
+    plt.plot(range(1, EPOCHS+1), history['train_psnr'], label='Train PSNR')
+    plt.plot(range(1, EPOCHS+1), history['val_psnr'], label='Val PSNR')
+    plt.title("PSNR")
+    plt.xlabel("Epoch")
+    plt.ylabel("PSNR")
+    plt.legend()
+    plt.grid(True)
+    
+    psnr_g_path = os.path.join(SAVE_DIR, "psnr_curve.png")
+    plt.savefig(psnr_g_path)
     plt.show()
 
 if __name__ == "__main__":
