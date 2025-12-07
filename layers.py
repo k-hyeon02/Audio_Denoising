@@ -1,14 +1,14 @@
 import torch
 import torch.nn.functional as F
-from components import imcol
-from components.tools import *
+import imcol
+from tools import *
 
 class Conv2d(Module):
-    def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, pad = 1):
+    def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, pad = 1, device=None):
         super().__init__()
         # 가중치 초기화 using He Initialization
         scale = torch.sqrt(torch.tensor(2.0 / (in_channels * kernel_size ** 2)))
-        self.params['W'] = torch.randn(out_channels, in_channels, kernel_size, kernel_size) * scale # (FN, C, FH, FW)
+        self.params['W'] = torch.randn(out_channels, in_channels, kernel_size, kernel_size, device=device) * scale # (FN, C, FH, FW)
 
         self.stride = stride
         self.pad = pad
@@ -40,10 +40,17 @@ class Conv2d(Module):
         # (FN, C, FH, FW) -> (FN, C*FH*FW) -> (C*FH*FW, FN)
         col_W = W.reshape(FN, -1).T    # shape : (필터 크기, 필터 개수)
 
+        # <--- 디버깅 코드 추가 시작 --->
+        print(f"DEBUG: Conv2d Input (col) Device: {col.device}")
+        W = self.params["W"]
+        col_W = W.reshape(FN, -1).T
+        print(f"DEBUG: Conv2d Weight (col_W) Device: {col_W.device}")
+        # <--- 디버깅 코드 추가 끝 --->
+
         # 4. (데이터 개수, 필터 크기) @ (필터 크기, 필터 개수) = (데이터 개수, 필터 개수) = (N*OH*OW, FN)
         out = col @ col_W
 
-        # 5. Reshape to 4D img 
+        # 5. Reshape to 4D img
         out = out.reshape(N, OH, OW, -1).permute(0, 3, 1, 2).contiguous()    # (N, FN, OH, OW) 채널이 FN으로 바뀐다.
 
         self.cache = (x, col, col_W)
@@ -76,7 +83,7 @@ class Conv2d(Module):
 
         # col2im으로 이미지 크기 복원
         dx = imcol.col2im(dcol, x.shape, FH, FW, self.stride, self.pad)
-        
+
         return dx
 
 # H = 32
@@ -86,11 +93,11 @@ class Conv2d(Module):
 # out_h = (H - 1) * stride - 2 * pad + FH
 # print(out_h)
 class ConvTranspose2d(Module):
-    def __init__(self, in_channels, out_channels, kernel_size = 4, stride = 2, pad = 1):
+    def __init__(self, in_channels, out_channels, kernel_size = 4, stride = 2, pad = 1, device=None):
         super().__init__()
         # 가중치 초기화 using He Initialization
         scale = torch.sqrt(torch.tensor(2.0 / (in_channels * kernel_size ** 2)))
-        self.params['W'] = torch.randn(in_channels, out_channels, kernel_size, kernel_size) * scale # (C, FN, FH, FW)
+        self.params['W'] = torch.randn(in_channels, out_channels, kernel_size, kernel_size, device=device) * scale # (C, FN, FH, FW)
 
         self.stride = stride
         self.pad = pad
@@ -202,7 +209,7 @@ class ReLU(Module):
     def backward(self, dout):
         dout[self.mask] = 0
         return dout
-    
+
 class LeakyReLU:
     def __init__(self, slope=0.01):
         self.slope = slope
@@ -257,7 +264,28 @@ class Concat:
         dx2 = dout[:, self.split_idx:, :, :]  # split_idx ~ 부터
 
         return dx1, dx2
-    
+
+
+# 손실함수 (MSE)
+class MSELoss:
+    def __init__(self):
+        self.diff = None
+        self.N = None
+
+    def forward(self, y, t):
+        self.diff = y - t
+        self.N = y.numel()  # 전체 요소 개수
+        loss = torch.sum(self.diff**2) / self.N
+
+        return loss
+
+    def backward(self):
+        # MSE 미분 : 2(y - t)/N
+        dout = 2 * self.diff / self.N
+
+        return dout
+
+
 # Batch Normal
 
 # class BatchNorm(Module):        # 사용 x
@@ -266,59 +294,59 @@ class Concat:
 #         self.num_features = num_features
 #         self.eps = eps
 #         self.momentum = momentum
-        
+
 #         # 학습 가능한 파라미터
 #         self.params['gamma'] = np.ones((num_features, 1))      # scale
 #         self.params['beta'] = np.zeros((num_features, 1))      # shift
-        
+
 #         # gradient 저장 공간
 #         self.grads['gamma'] = np.zeros_like(self.params['gamma'])
 #         self.grads['beta'] = np.zeros_like(self.params['beta'])
-        
+
 #         # moving average (평가모드에서 사용)
 #         self.moving_mean = np.zeros((num_features, 1))
 #         self.moving_var = np.ones((num_features, 1))
-    
+
 #     def forward(self, x):
 #         # x shape: (batch_size, num_features) 또는 (batch_size, num_features, height, width)
 #         # 여기서는 2D 입력 가정 (batch_size, num_features)
 #         self.cache = x.copy()
 #         batch_size = x.shape[0]
-        
+
 #         if self._train_mode:
 #             # 학습 모드: 배치 통계 사용
 #             mu = np.mean(x, axis=0, keepdims=True)
 #             var = np.var(x, axis=0, keepdims=True)
-            
+
 #             # moving average 업데이트
-#             self.moving_mean = (self.momentum * self.moving_mean + 
+#             self.moving_mean = (self.momentum * self.moving_mean +
 #                               (1 - self.momentum) * mu)
-#             self.moving_var = (self.momentum * self.moving_var + 
+#             self.moving_var = (self.momentum * self.moving_var +
 #                              (1 - self.momentum) * var)
-            
+
 #             # 정규화
 #             x_norm = (x - mu) / np.sqrt(var + self.eps)
 #             out = self.params['gamma'] * x_norm + self.params['beta']
-            
+
 #             # backward에서 사용하기 위해 cache 저장
 #             self.cache = (x, mu, var, x_norm)
-            
+
 #         else:
 #             # 평가 모드: moving average 사용
 #             x_norm = (x - self.moving_mean) / np.sqrt(self.moving_var + self.eps)
 #             out = self.params['gamma'] * x_norm + self.params['beta']
-        
+
 #         return out
-    
+
 #     def backward(self, dout):
 #         # dout shape: 입력과 같은 shape
 #         x, mu, var, x_norm = self.cache
-        
+
 #         # gamma, beta gradient 계산
 #         batch_size = x.shape[0]
 #         self.grads['gamma'] = np.sum(dout * x_norm, axis=0, keepdims=True)
 #         self.grads['beta'] = np.sum(dout, axis=0, keepdims=True)
-        
+
 #         # 입력 x에 대한 gradient 계산
 #         dx_norm = dout * self.params['gamma']
 #         dvar = np.sum(dx_norm * (x - mu) * -0.5 * (var + self.eps) ** -1.5, axis=0, keepdims=True)
@@ -327,7 +355,7 @@ class Concat:
 #         dx = dx_norm / np.sqrt(var + self.eps) + \
 #              2 * dvar * (x - mu) / batch_size + \
 #              dmu / batch_size
-        
+
 #         return dx
 
 
@@ -335,19 +363,19 @@ class Concat:
 # if __name__ == "__main__":
 #     # 1. 입력 데이터 (배치 1, 채널 3, 16x16 이미지)
 #     x = np.random.randn(1, 3, 16, 16)
-    
+
 #     # 2. Transpose Conv 레이어 생성 (채널 3->16, 2배 확대)
 #     # Stride=2를 줘야 2배로 커집니다.
 #     t_conv = ConvTranspose2d(in_channels=3, out_channels=16, kernel_size=2, stride=2, pad=0)
-    
+
 #     # 3. 순전파
 #     out = t_conv.forward(x)
 #     print(f"Input Shape:  {x.shape}")
 #     print(f"Output Shape: {out.shape}")
-    
+
 #     # 예상 결과: 16x16 -> 32x32
 #     # Output H = (16-1)*2 - 0 + 2 = 32
-    
+
 #     # 4. 역전파
 #     dout = np.random.randn(*out.shape)
 #     dx = t_conv.backward(dout)

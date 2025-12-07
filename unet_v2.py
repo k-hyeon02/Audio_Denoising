@@ -1,14 +1,14 @@
 from layers import *
-from components.tools import *
+from tools import *
 
 class DoubleConv(Module):
-    def __init__(self, in_channels, out_channels, stride=1, pad=1):
+    def __init__(self, in_channels, out_channels, stride=1, pad=1, device=None):
         super().__init__()
         self.DC = Sequential(
-            Conv2d(in_channels, out_channels, stride=stride, pad=pad),
+            Conv2d(in_channels, out_channels, stride=stride, pad=pad, device=device),
             # BatchNorm(in_channels),
             ReLU(),
-            Conv2d(out_channels, out_channels, stride=stride, pad=pad),
+            Conv2d(out_channels, out_channels, stride=stride, pad=pad, device=device),
             # BatchNorm(in_channels),
             ReLU()
         )
@@ -22,13 +22,13 @@ class DoubleConv(Module):
     def backward(self, dout):
         dout = self.DC.backward(dout)
         return dout
-    
+
 
 class Down(Module):     # 내려오고 doubleconv 진행
-    def __init__(self, in_channels, out_channels, stride=1, pad=1):
+    def __init__(self, in_channels, out_channels, stride=1, pad=1, device=None):
         super().__init__()
-        self.SConv = Conv2d(in_channels, out_channels, stride=2, pad=1)
-        self.DC = DoubleConv(out_channels, out_channels, stride=stride, pad=pad)
+        self.SConv = Conv2d(in_channels, out_channels, stride=2, pad=1, device=device)
+        self.DC = DoubleConv(out_channels, out_channels, stride=stride, pad=pad, device=device)
 
     def forward(self, x):
         x = self.SConv.forward(x)
@@ -42,10 +42,10 @@ class Down(Module):     # 내려오고 doubleconv 진행
         return dout
 
 class Up(Module):       # 올라가고 doubleconv 진행
-    def __init__(self, in_channels, out_channels, stride=1, pad=1):
+    def __init__(self, in_channels, out_channels, stride=1, pad=1, device=None):
         super().__init__()
-        self.TConv = ConvTranspose2d(in_channels, out_channels, stride=2, pad=1)
-        self.DC = DoubleConv(in_channels, out_channels, stride=1, pad=1)
+        self.TConv = ConvTranspose2d(in_channels, out_channels, stride=2, pad=1, device=device)
+        self.DC = DoubleConv(in_channels, out_channels, stride=1, pad=1, device=device)
         self.sc = None
 
     def forward(self, x, sc):
@@ -69,21 +69,23 @@ CHANNELS = [1, 64, 128, 256, 512, 1024]
 
 
 class UNet(Module):
-    def __init__(self, channels):
+    def __init__(self, channels, device=None):
         self.U_down = ModuleList([
-            DoubleConv(1, 64),
-            Down(64, 128),
-            Down(128, 256),
-            Down(256, 512)
+            DoubleConv(1, 64, device=device),
+            Down(64, 128, device=device),
+            Down(128, 256, device=device),
+            Down(256, 512, device=device),
         ])
-        self.bottleneck = Down(512, 1024)
+
+        self.bottleneck = Down(512, 1024, device=device)
+
         self.U_up = ModuleList([
-            Up(1024, 512),
-            Up(512, 256),
-            Up(256, 128),
-            Up(128, 64)
+            Up(1024, 512, device=device),
+            Up(512, 256, device=device),
+            Up(256, 128, device=device),
+            Up(128, 64, device=device)
         ])
-        self.outlayer = Conv2d(64, 1, kernel_size=1, pad=0)
+        self.outlayer = Conv2d(64, 1, kernel_size=1, pad=0, device=device)
 
     def forward(self, x):
         self.skip = []
@@ -91,7 +93,7 @@ class UNet(Module):
         for module in self.U_down.modules:
             x = module.forward(x)
             self.skip.append(x)
-        
+
         x = self.bottleneck.forward(x)
 
         for module in self.U_up.modules:
@@ -100,7 +102,7 @@ class UNet(Module):
         out = self.outlayer.forward(x)
 
         return out
-    
+
     def backward(self, dout):
         self.skip = []
         i = 3
@@ -108,15 +110,13 @@ class UNet(Module):
         for module in reversed(self.U_up.modules):
             dsc, dout = module.backward(dout)
             self.skip.append(dsc)
-        
+
         dout = self.bottleneck.backward(dout)
 
         for module in reversed(self.U_down.modules):
             dout = module.backward(dout + self.skip[i])
             i -= 1
         return dout
-
-
 
 
 def test():
