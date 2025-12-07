@@ -57,8 +57,8 @@ class Up(Module):       # 올라가고 doubleconv 진행
         return out
     
     def backward(self, dout):
-        _, C, __, ___ = dout.shape
         dout = self.DC.backward(dout)
+        _, C, __, ___ = dout.shape
         dsc = dout[:, :C//2, :, :]
         dout = self.TConv.backward(dout[:, C//2:, :, :])
 
@@ -74,9 +74,9 @@ class UNet(Module):
             DoubleConv(1, 64),
             Down(64, 128),
             Down(128, 256),
-            Down(256, 512),
-            Down(512, 1024)
+            Down(256, 512)
         ])
+        self.bottleneck = Down(512, 1024)
         self.U_up = ModuleList([
             Up(1024, 512),
             Up(512, 256),
@@ -91,6 +91,9 @@ class UNet(Module):
         for module in self.U_down.modules:
             x = module.forward(x)
             self.skip.append(x)
+        
+        x = self.bottleneck.forward(x)
+
         for module in self.U_up.modules:
             x = module.forward(x, self.skip[i])
             i -= 1
@@ -101,19 +104,23 @@ class UNet(Module):
     def backward(self, dout):
         self.skip = []
         i = 3
+        dout = self.outlayer.backward(dout)
         for module in reversed(self.U_up.modules):
             dsc, dout = module.backward(dout)
             self.skip.append(dsc)
-        for module in reversed(self.U_down.modules):
-            dout = module(torch.sum(dout, self.skip[i]))
+        
+        dout = self.bottleneck.backward(dout)
 
+        for module in reversed(self.U_down.modules):
+            dout = module.backward(dout + self.skip[i])
+            i -= 1
         return dout
 
 
 
 
 def test():
-    x = torch.randn(3, 1, 161, 161)
+    x = torch.randn(3, 1, 128, 128)
     model = UNet(CHANNELS)
     preds = model.forward(x)
     print(model.parameters)
@@ -121,8 +128,7 @@ def test():
     # loss_func = torch.nn.MSELoss()
     # loss = loss_func.forward(preds, x)
     out = model.backward(x)
-    print(out)
-    torch.nn.MSELoss()
+    print(out.shape)
 
 if __name__ == "__main__":
     test()

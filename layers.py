@@ -3,7 +3,6 @@ import torch.nn.functional as F
 from components import imcol
 from components.tools import *
 
-
 class Conv2d(Module):
     def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, pad = 1):
         super().__init__()
@@ -80,11 +79,14 @@ class Conv2d(Module):
         
         return dx
 
-
-
+# H = 32
+# stride=2
+# pad=1
+# FH=4
+# out_h = (H - 1) * stride - 2 * pad + FH
+# print(out_h)
 class ConvTranspose2d(Module):
-
-    def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 2, pad = 1):
+    def __init__(self, in_channels, out_channels, kernel_size = 4, stride = 2, pad = 1):
         super().__init__()
         # 가중치 초기화 using He Initialization
         scale = torch.sqrt(torch.tensor(2.0 / (in_channels * kernel_size ** 2)))
@@ -92,76 +94,86 @@ class ConvTranspose2d(Module):
 
         self.stride = stride
         self.pad = pad
+
     def forward(self, x):
         """
         [Forward 원리]
         입력 x를 펴서(flatten), 가중치와 곱한 뒤,
         col2im을 사용해 겹치는 부분을 더해가며 큰 이미지를 만듭니다.
         """
-        W = self.params['W']
-        x_N, x_C, x_H, x_W = x.shape
-        w_In, w_Out, w_H, w_W = W.shape
+        W_param = self.params['W']
+        N, C, H, W = x.shape
+        C, FN, FH, FW = W_param.shape
         
         # 1. 출력 크기 계산
-        out_h = (x_H - 1) * self.stride - 2 * self.pad + w_H
-        out_w = (x_W - 1) * self.stride - 2 * self.pad + w_W
+        out_h = (H - 1) * self.stride - 2 * self.pad + FH
+        out_w = (W - 1) * self.stride - 2 * self.pad + FW
         
+        out_shape = (N, FN, out_h, out_w)
         # 2. 입력 x 변형 (행렬 곱을 위해)
         # (N, C, H, W) -> (N, H, W, C) -> (N*H*W, C)
         # 여기서 C는 in_channels입니다.
-        x_reshaped = x.permute(0, 2, 3, 1).contiguous().reshape(-1, w_In)
+        x_flat = x.permute(0, 2, 3, 1).contiguous().reshape(-1, C)
         
         # 3. 가중치 변형
         # (In, Out, KH, KW) -> (In, Out*KH*KW)
-        col_W = W.reshape(w_In, -1)
+        col_W = W_param.reshape(C, -1)
         
         # 4. 행렬 곱 (Convolution의 역연산)
-        # (N*H*W, In) @ (In, Out*KH*KW) -> (N*H*W, Out*KH*KW)
-        out_col = x_reshaped @ col_W
+        # (N*H*W, C) @ (C, FN*FH*FW) -> (N*H*W, FN*FH*FW)
+        out = x_flat @ col_W
         
         # 5. col2im으로 이미지 복원 (작은 이미지 -> 큰 이미지)
         # out_col을 다시 (N, Out, OH, OW) 형태로 조립합니다.
-        out = imcol.col2im(out_col, (x_N, w_Out, out_h, out_w), w_H, w_W, self.stride, self.pad)
+        out = imcol.col2im(out, out_shape, FH, FW, self.stride, self.pad)
         
         # 역전파를 위해 저장
-        self.cache = (x, out_col, col_W)
+        self.cache = (x, x_flat, col_W)
         
         return out
 
     def backward(self, dout):
-        """
-        [Backward 원리]
-        TransposeConv의 역전파는 '일반 Convolution'의 순전파와 같습니다.
-        큰 이미지(dout)를 im2col로 잘라서 가중치와 곱하면 원래 크기의 기울기가 나옵니다.
-        """
-        W = self.params['W']
-        x, out_col, col_W = self.cache
-        w_In, w_Out, w_H, w_W = W.shape
-        
-        # 2. 가중치(W)의 기울기
-        # dout을 im2col로 펼칩니다.
-        # TransposeConv의 출력이었던 (N, Out, OH, OW)가 여기선 입력처럼 쓰입니다.
-        # col shape: (N*x_H*x_W, Out*KH*KW)
-        col_dout = imcol.im2col(dout, w_H, w_W, self.stride, self.pad)
-        
-        # x_reshaped.T @ col_dout
-        # x: (N*x_H*x_W, In)
-        # dW: (In, N*x_H*x_W) @ (N*x_H*x_W, Out*KH*KW) -> (In, Out*KH*KW)
-        x_reshaped = x.permute(0, 2, 3, 1).contiguous().reshape(-1, w_In)
-        dW = x_reshaped.T @ col_dout
-        
-        self.grads['W'] = dW.reshape(w_In, w_Out, w_H, w_W)
-        
-        # 3. 입력(x)의 기울기
-        # col_dout @ W.T
-        # (N*x_H*x_W, Out*KH*KW) @ (Out*KH*KW, In) -> (N*x_H*x_W, In)
-        dx_col = col_dout @ col_W.T
-        
-        # 모양 복구
-        dx = dx_col.reshape(x.shape[0], x.shape[2], x.shape[3], w_In).permute(0, 3, 1, 2).contiguous()
-        
-        return dx
+        W_param = self.params['W']
+      
+        C, FN, FH, FW = W_param.shape
+        x, x_flat, col_W = self.cache
+        N, C, H ,W = x.shape
 
+        # 2. dW
+        # dout을 im2col로 전개
+        # col_dout : (N * OH * OW, FN * FH * FW)
+        col_dout = imcol.im2col(dout, FH, FW, self.stride, self.pad)
+
+        # dW = x_flat.T * col_dout
+        # 헹렬 곱을 위해 reshape
+        # x_flat : (N * H * W, C) -> transpose
+        # (C, N * H * W) @ (N * OH * OW, FN * FH * FW)
+        # = (C, FN * FH * FW)
+        dW_flat = x_flat.T @ col_dout
+        self.dW = dW_flat.reshape(C, FN, FH, FW)  # 원래 모양으로 복구  
+
+        # 3. dx
+        # dx = col_dout @ W.T
+        # col_dout : (N * OH * OW, FN * FH * FW)
+        # W : (C, FN, FH, FW) -> (FN * FH * FW, C)
+        col_W_T = W_param.reshape(C, -1).T
+
+        # (N * OH * OW, FN * FH * FW) @ (FN * FH * FW, C)
+        # = (N * OH * OW, C)
+        dx_flat = torch.matmul(col_dout, col_W_T)
+
+        # 원래 크기로 복원
+        dx = dx_flat.reshape(N, H, W, C).permute(0, 3, 1, 2)
+
+        return dx
+if __name__ == "__main__":
+    t1 = torch.randn(3, 64, 32, 32)
+    t2 = torch.randn(3, 32, 64, 64)
+    test = ConvTranspose2d(64, 32, kernel_size=4)
+    res1 = test.forward(t1)
+    res2 = test.backward(t2)
+    print(res1.shape)
+    print(res2.shape)
 
 # Activation
 
