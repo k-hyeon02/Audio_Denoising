@@ -1,11 +1,12 @@
 from torch.utils.data import Dataset
+import torch
 import torchaudio
 import glob
 import random
 import os
 
-from audio_mixer import AudioMixer
-from spectrogram import Spectrogram
+from .audio_mixer import AudioMixer
+from .spectrogram import Spectrogram
 
 
 class NoiseRemovalDataset(Dataset):
@@ -18,6 +19,7 @@ class NoiseRemovalDataset(Dataset):
         all_clean_files = sorted(
             glob.glob(os.path.join(clean_dir, "**/*.flac"), recursive=True)
         )
+        # noise는 전체 공유
         self.noise_files = sorted(
             glob.glob(os.path.join(noise_dir, "**/*.wav"), recursive=True)
         )
@@ -34,12 +36,7 @@ class NoiseRemovalDataset(Dataset):
         elif mode == 'val':
             self.clean_files = all_clean_files[split_point:]  # 뒷부분 20%
         else:
-            print("mode는 'train'/'val' 이어야 함")
-
-        # noise는 전체 공유
-        self.noise_files = sorted(
-            glob.glob(os.path.join(noise_dir, "**/*.wav"), recursive=True)
-        )
+            raise ValueError("mode는 'train'/'val' 이어야 함")
 
         # 도구(Tools) 초기화
         self.mixer = AudioMixer(target_frame=target_frame, hop_length=hop_length)
@@ -48,12 +45,14 @@ class NoiseRemovalDataset(Dataset):
     def __len__(self):
         # 전체 학습 데이터 수 (클린 파일 개수 기준)
         return len(self.clean_files)
-    
-    def normalize(self, tensor):
-        min_val = tensor.min()
-        max_val = tensor.max()
 
-        norm_tensor = (tensor - min_val) / (max_val - min_val + 1e-8)
+    # 인간 가청 영역 : -60dB ~ 0dB
+    def normalize(self, tensor):
+        tensor = torch.clamp(tensor, min=-80.0, max=0.0)
+
+        # 0~1 스케일로 변환
+        norm_tensor = (tensor + 80.0) / 80.0
+
         return norm_tensor
 
     def __getitem__(self, idx):
@@ -87,8 +86,8 @@ class NoiseRemovalDataset(Dataset):
 
 
 if __name__ == "__main__":
-    clean_dir = "../data/LibriSpeech/train-clean-100/"
-    noise_dir = "../data/noise_datasets/audio/"
+    clean_dir = "./data/LibriSpeech/train-clean-100/"
+    noise_dir = "./data/noise_datasets/audio/"
 
     import matplotlib.pyplot as plt
     from torch.utils.data import DataLoader

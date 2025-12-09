@@ -295,6 +295,22 @@ class DoubleConv:
         self.conv2.step(lr)
 
 
+# sigmoid
+class Sigmoid:
+    def __init__(self):
+        self.out = None
+
+    def forward(self, x):
+        # y = 1 / (1 + e^-x)
+        self.out = 1 / (1 + torch.exp(-x))
+        return self.out
+    
+    def backward(self, dout):
+        # sigmoid 미분 : y * (1 - y)
+        dx = dout * self.out * (1.0 - self.out)
+        return dx
+
+
 # 손실함수 (MSE)
 class MSELoss:
     def __init__(self):
@@ -313,3 +329,25 @@ class MSELoss:
         dout = 2 * self.diff / self.N
         
         return dout 
+
+
+# 손실함수 (L1 Loss)
+# L1 = |y - t| / N
+class L1Loss:
+    def __init__(self):
+        self.diff = None
+        self.N = None
+
+    def forward(self, y, t):
+        self.diff = y - t
+        self.N = y.numel()
+        loss = torch.sum(torch.abs(self.diff)) / self.N
+
+        return loss
+
+    def backward(self):
+        # 미분 : (1/N) * sign(pred - target)
+        grad_direction = torch.sign(self.diff)
+        dout = grad_direction / self.N
+
+        return dout

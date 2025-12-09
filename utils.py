@@ -98,6 +98,16 @@ def col2im(col, input_shape, filter_h, filter_w, stride=1, pad=1):
 def he_init(fan_in, shape):
     return torch.randn(shape) * np.sqrt(2.0 / fan_in)
 
+# device 설정
+def get_device():
+    """장치 자동 감지: Mac(MPS), NVIDIA(CUDA), CPU 순서"""
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    elif torch.cuda.is_available():
+        return torch.device("cuda")
+    else:
+        return torch.device("cpu")
+
 
 # 모델 gpu 이동 및 저장
 def move_layer_to_device(layer, device):
@@ -146,6 +156,44 @@ def save_checkpoint(model, save_dir, filename):
             }
 
     torch.save(checkpoint, save_path)
+
+
+# 저장한 가중치 불러오기
+def load_checkpoint(model, checkpoint_path, device):
+    """
+    커스텀 save_checkpoint로 저장된 가중치를 모델에 로드하는 함수
+    """
+    if not os.path.exists(checkpoint_path):
+        print(f"⚠️ 파일이 없습니다: {checkpoint_path}")
+        return None
+
+    print(f"🔄 가중치 로딩 중... ({checkpoint_path})")
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+
+    # 모델의 모듈 리스트를 순회하며 저장된 값을 찾아 대입
+    for i, module in enumerate(model.modules):
+        # 1. DoubleConv와 같이 내부에 params 리스트가 있는 경우
+        if hasattr(module, "params"):
+            for j, sub in enumerate(module.params):
+                key = f"{i}_{type(module).__name__}_sub{j}"
+                if key in checkpoint:
+                    # 저장된 텐서를 현재 장치(device)로 이동시켜서 대입
+                    sub.W = checkpoint[key]["W"].to(device)
+                    sub.b = checkpoint[key]["b"].to(device)
+                else:
+                    print(f"⚠️ Warning: {key} not found in checkpoint.")
+
+        # 2. Conv2d, FinalConv 등 단일 레이어인 경우
+        elif hasattr(module, "W"):
+            key = f"{i}_{type(module).__name__}"
+            if key in checkpoint:
+                module.W = checkpoint[key]["W"].to(device)
+                module.b = checkpoint[key]["b"].to(device)
+            else:
+                print(f"⚠️ Warning: {key} not found in checkpoint.")
+
+    print("✅ 모델 로드 완료!")
+    return model
 
 
 # PSNR 계산 : PSNR = 10 * log10(MAX^2 / MSE)

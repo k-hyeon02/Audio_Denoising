@@ -55,7 +55,7 @@ class Spectrogram:
 
 if __name__ == "__main__":
     
-    from train_dataset.audio_mixer import AudioMixer
+    from audio_mixer import AudioMixer
 
     # 1. 데이터 로드
     clean_path = "./data/LibriSpeech/train-clean-100/19/198/19-198-0000.flac"
@@ -81,11 +81,11 @@ if __name__ == "__main__":
     fig, axes = plt.subplots(nrows=1, ncols=2)
     plt.tight_layout()
 
-    clean_dB_spec = spec.to_spec(clean_segment)
+    clean_dB_spec, _ = spec.to_spec(clean_segment)
     img_clean = spec.plot(clean_dB_spec, axes[0], title='Clean Segment')
     fig.colorbar(img_clean, ax=axes[0], format='%+2.0f dB') 
 
-    mixed_dB_spec = spec.to_spec(mixed_audio)
+    mixed_dB_spec, _ = spec.to_spec(mixed_audio)
     img_mixed = spec.plot(mixed_dB_spec, axes[1], title="Mixed Audio")
     fig.colorbar(img_mixed, ax=axes[1], format="%+2.0f dB")  
 

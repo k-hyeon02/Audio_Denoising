@@ -3,6 +3,7 @@ from layers import *
 
 UNET_CHANNELS = [1, 32, 64, 128, 256, 512]
 
+
 class UNet:
     def __init__(self, channels=None, filter_size=3):
         if channels is None:
@@ -21,23 +22,39 @@ class UNet:
         # Layer 1 : input(1ch) -> 32ch (256*256 -> 128*128)
         self.enc1 = DoubleConv(c_in, c1, filter_size)
         # 2*2 Conv stride 2
-        self.down1 = Conv2d(he_init(c1*filter_size*filter_size, (c1, c1, filter_size, filter_size)), 
-                            torch.zeros(c1), stride=2, pad=1)
+        self.down1 = Conv2d(
+            he_init(c1 * filter_size * filter_size, (c1, c1, filter_size, filter_size)),
+            torch.zeros(c1),
+            stride=2,
+            pad=1,
+        )
 
         # Layer 2 : 32 -> 64 (128*128 -> 64*64)
         self.enc2 = DoubleConv(c1, c2, filter_size)
-        self.down2 = Conv2d(he_init(c2*filter_size*filter_size, (c2, c2, filter_size, filter_size)), 
-                            torch.zeros(c2), stride=2, pad=1)
+        self.down2 = Conv2d(
+            he_init(c2 * filter_size * filter_size, (c2, c2, filter_size, filter_size)),
+            torch.zeros(c2),
+            stride=2,
+            pad=1,
+        )
 
         # Layer 3 : 64 -> 128 (64*64 -> 32*32)
         self.enc3 = DoubleConv(c2, c3, filter_size)
-        self.down3 = Conv2d(he_init(c3*filter_size*filter_size, (c3, c3, filter_size, filter_size)), 
-                            torch.zeros(c3), stride=2, pad=1)
+        self.down3 = Conv2d(
+            he_init(c3 * filter_size * filter_size, (c3, c3, filter_size, filter_size)),
+            torch.zeros(c3),
+            stride=2,
+            pad=1,
+        )
 
         # Layer 4 : 128 -> 256 (32*32 -> 16*16)
         self.enc4 = DoubleConv(c3, c4, filter_size)
-        self.down4 = Conv2d(he_init(c4*filter_size*filter_size, (c4, c4, filter_size, filter_size)), 
-                            torch.zeros(c4), stride=2, pad=1)
+        self.down4 = Conv2d(
+            he_init(c4 * filter_size * filter_size, (c4, c4, filter_size, filter_size)),
+            torch.zeros(c4),
+            stride=2,
+            pad=1,
+        )
 
         # ==========================================
         # 2. Bottleneck
@@ -50,44 +67,69 @@ class UNet:
         # ==========================================
 
         # Layer 4 : 512 -> 256
-        self.up4 = ConvTransposed2d(he_init(c_bot*filter_size*filter_size, (c_bot, c4, filter_size, filter_size)), 
-                                    torch.zeros(c4))
+        self.up4 = ConvTransposed2d(
+            he_init(
+                c_bot * filter_size * filter_size, (c_bot, c4, filter_size, filter_size)
+            ),
+            torch.zeros(c4),
+        )
         self.cat4 = Concat()
         # 입력 채널 = up(128) + skip(128) = 256
-        self.dec4 = DoubleConv(2*c4, c4, filter_size)
+        self.dec4 = DoubleConv(2 * c4, c4, filter_size)
 
         # Layer 3 : 256 -> 128
-        self.up3 = ConvTransposed2d(he_init(c4*filter_size*filter_size, (c4, c3, filter_size, filter_size)), 
-                                    torch.zeros(c3))
+        self.up3 = ConvTransposed2d(
+            he_init(c4 * filter_size * filter_size, (c4, c3, filter_size, filter_size)),
+            torch.zeros(c3),
+        )
         self.cat3 = Concat()
-        self.dec3 = DoubleConv(2*c3, c3, filter_size)
+        self.dec3 = DoubleConv(2 * c3, c3, filter_size)
 
         # Layer 2 : 128 -> 64
-        self.up2 = ConvTransposed2d(he_init(c3*filter_size*filter_size, (c3, c2, filter_size, filter_size)), 
-                                    torch.zeros(c2))
+        self.up2 = ConvTransposed2d(
+            he_init(c3 * filter_size * filter_size, (c3, c2, filter_size, filter_size)),
+            torch.zeros(c2),
+        )
         self.cat2 = Concat()
-        self.dec2 = DoubleConv(2*c2, c2, filter_size)
+        self.dec2 = DoubleConv(2 * c2, c2, filter_size)
 
         # Layer 1 : 64 -> 32
-        self.up1 = ConvTransposed2d(he_init(c2*filter_size*filter_size, (c2, c1, filter_size, filter_size)), 
-                                    torch.zeros(c1))
+        self.up1 = ConvTransposed2d(
+            he_init(c2 * filter_size * filter_size, (c2, c1, filter_size, filter_size)),
+            torch.zeros(c1),
+        )
         self.cat1 = Concat()
-        self.dec1 = DoubleConv(2*c1, c1, filter_size)
+        self.dec1 = DoubleConv(2 * c1, c1, filter_size)
 
         # ==========================================
         # 4. Final Output
         # 32ch -> Out_channels (1x1 Conv)
         # ==========================================
-        self.final_conv = Conv2d(he_init(c1, (c_in, c1, 1, 1)), torch.zeros(1), stride=1, pad=0)
+        self.final_conv = Conv2d(
+            he_init(c1, (c_in, c1, 1, 1)), torch.zeros(1), stride=1, pad=0
+        )
+        self.sigmoid = Sigmoid()
 
         # 학습 가능한 모든 모듈 리스트 (step 및 backward 관리용)
         self.modules = [
-            self.enc1, self.down1, self.enc2, self.down2, 
-            self.enc3, self.down3, self.enc4, self.down4,
+            self.enc1,
+            self.down1,
+            self.enc2,
+            self.down2,
+            self.enc3,
+            self.down3,
+            self.enc4,
+            self.down4,
             self.bottleneck,
-            self.up4, self.dec4, self.up3, self.dec3,
-            self.up2, self.dec2, self.up1, self.dec1,
-            self.final_conv
+            self.up4,
+            self.dec4,
+            self.up3,
+            self.dec3,
+            self.up2,
+            self.dec2,
+            self.up1,
+            self.dec1,
+            self.final_conv,
         ]
 
         # Concat 레이어 (backward시 필요)
@@ -123,7 +165,7 @@ class UNet:
         d3 = self.dec3.forward(d3)
 
         # Layer 2
-        d2 = self.up2.forward(d3)  
+        d2 = self.up2.forward(d3)
         d2 = self.cat2.forward(d2, s2)  # Concat with Skip 2
         d2 = self.dec2.forward(d2)
 
@@ -133,10 +175,13 @@ class UNet:
         d1 = self.dec1.forward(d1)
 
         out = self.final_conv.forward(d1)
+        out = self.sigmoid.forward(out)
 
         return out
 
     def backward(self, dout):
+        dout = self.sigmoid.backward(dout)
+
         dout = self.final_conv.backward(dout)
 
         # Decoder 1
