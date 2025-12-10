@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-from unet_v2 import UNet
+from unet_v3 import UNet
 from utils import *
 from train_dataset.train_dataset import *
 
@@ -53,14 +53,14 @@ def load_custom_weights(model, checkpoint_path):
 if __name__ == '__main__':
     # 1. 설정 (경로 및 하이퍼파라미터)
     # 저장된 체크포인트 파일 경로
-    CHECKPOINT_PATH = "./checkpoints_2/last_checkpoint.pth"
+    CHECKPOINT_PATH = "./checkpoints_3/last_checkpoint.pth"
 
     # 데이터 경로
     CLEAN_DIR = "./data/LibriSpeech/train-clean-100/"
     NOISE_DIR = "./data/noise_datasets/audio/"
 
     # 모델 설정 (학습 때와 동일해야 함)
-    CHANNELS = [1, 16, 32, 64, 128, 256]
+    CHANNELS = [1, 32, 64, 128, 256, 512]
     FILTER_SIZE = 3
 
     # 2. 데이터셋 및 모델 준비
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     plt.subplot(1, 3, 1)
     plt.title("Input (Noisy Mixed)")
     plt.imshow(mixed_img, aspect="auto", origin="lower", cmap="magma")
-    plt.colorbar(format="%+2.0f dB")
+    plt.colorbar(format="%+.1f dB")
     plt.xlabel("Time Frames")
     plt.ylabel("Frequency")
 

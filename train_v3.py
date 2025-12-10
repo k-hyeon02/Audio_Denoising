@@ -12,7 +12,7 @@ from utils import *
 from train_dataset.train_dataset import NoiseRemovalDataset
 
 # 하이퍼파라미터 설정
-LR = 0.0001
+LR = 0.001
 EPOCHS = 10
 BATCH_SIZE = 16  # 서버용 배치 사이즈
 
@@ -144,7 +144,7 @@ def train():
     # 4. loss 시각화
     plt.plot(range(1, EPOCHS + 1), history["train_loss"], label="Train Loss")
     plt.plot(range(1, EPOCHS + 1), history["val_loss"], label="Val Loss")
-    plt.title("MSE Loss")
+    plt.title("L1 Loss")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.legend()
