@@ -46,7 +46,7 @@ class Spectrogram:
             x_axis="time",
             y_axis="linear",
             ax=ax,
-            cmap="magma"
+            cmap="coolwarm"
         )
         ax.set_title(title)
 
