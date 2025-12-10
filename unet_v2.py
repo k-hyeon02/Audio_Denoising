@@ -1,5 +1,5 @@
 from layers import *
-from tools import *
+from components.tools import *
 
 class DoubleConv(Module):
     def __init__(self, in_channels, out_channels, stride=1, pad=1, device=None):

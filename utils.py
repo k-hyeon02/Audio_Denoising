@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import os
-from tools import Module
+from components.tools import Module
 
 
 # 모델 gpu 이동 및 저장

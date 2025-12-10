@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
-import imcol
-from tools import *
+import components.imcol as imcol
+from components.tools import *
 
 class Conv2d(Module):
     def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, pad = 1, device=None):

@@ -4,7 +4,7 @@ import torchaudio.transforms as T
 import librosa
 import random
 import matplotlib.pyplot as plt
-from train_dataset.audio_mixer import AudioMixer
+import audio_mixer as A
 
 # 16000Hz에서 25ms = 400 < 512 = n_fft 로 설정
 # 이동 간격 : hop_length = 160 : 16000Hz에서 10ms, 데이터 길이가 40,800이므로 총 0~255 프레임의 시간축 생성
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     noise_wave, noise_rate = torchaudio.load(noise_path)
 
     # 2. AudioMixer 인스턴스 생성
-    mixer = AudioMixer(sr=16000, target_frame=256, hop_length=160)
+    mixer = A.AudioMixer(sr=16000, target_frame=256, hop_length=160)
 
     # 3. 믹싱
     test_snr = random.uniform(0, 15)
