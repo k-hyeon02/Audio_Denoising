@@ -40,11 +40,10 @@ def load_custom_weights(model, checkpoint_path):
             # 실제 가중치 주입
             for param_name, param_tensor in state_dict.items():
                 if hasattr(target, param_name):
-                    # 필요하면 clone() 해서 복사
                     setattr(target, param_name, param_tensor.clone())
 
         except Exception as e:
-            # 디버깅 원하면 여기서 print(e, key) 찍어봐도 됨
+            print(e, key)
             pass
 
     print("가중치 로드 완료!")
@@ -53,7 +52,7 @@ def load_custom_weights(model, checkpoint_path):
 if __name__ == '__main__':
     # 1. 설정 (경로 및 하이퍼파라미터)
     # 저장된 체크포인트 파일 경로
-    CHECKPOINT_PATH = "./checkpoints_3/last_checkpoint.pth"
+    CHECKPOINT_PATH = "./checkpoints_3/checkpoint_35.pth"
 
     # 데이터 경로
     CLEAN_DIR = "./data/LibriSpeech/train-clean-100/"
@@ -97,7 +96,7 @@ if __name__ == '__main__':
     plt.subplot(1, 3, 2)
     plt.title("Output (Model Predicted)")
     plt.imshow(output_img, aspect="auto", origin="lower", cmap="coolwarm")
-    plt.colorbar(format="%+2.0f dB")
+    plt.colorbar(format="%+.1f dB")
     plt.xlabel("Time Frames")
     plt.ylabel("Frequency")
 
@@ -105,7 +104,7 @@ if __name__ == '__main__':
     plt.subplot(1, 3, 3)
     plt.title("Target (Clean Speech)")
     plt.imshow(target_img, aspect="auto", origin="lower", cmap="coolwarm")
-    plt.colorbar(format="%+2.0f dB")
+    plt.colorbar(format="%+.1f dB")
     plt.xlabel("Time Frames")
     plt.ylabel("Frequency")
 

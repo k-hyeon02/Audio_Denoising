@@ -15,6 +15,16 @@ class Conv2d:
         self.col_W = None
         self.x_shape = None
 
+        self.t = 0  # 타임 스텝
+        
+        # Weight에 대한 m, v (모양은 W와 동일)
+        self.m_W = torch.zeros_like(self.W)
+        self.v_W = torch.zeros_like(self.W)
+        
+        # Bias에 대한 m, v (모양은 b와 동일)
+        self.m_b = torch.zeros_like(self.b)
+        self.v_b = torch.zeros_like(self.b)
+
     def forward(self, x):
         FN, C, FH, FW = self.W.shape
         N, C, H, W = x.shape
@@ -81,10 +91,33 @@ class Conv2d:
         dx = col2im(dcol, self.x_shape, FH, FW, self.stride, self.pad)
 
         return dx
-    
-    def step(self, lr):
-        self.W -= lr * self.dW
-        self.b -= lr * self.db
+
+    def step(self, lr, beta1=0.9, beta2=0.999, eps=1e-8):
+        # SGD
+        # self.W -= lr * self.dW
+        # self.b -= lr * self.db
+
+        # ----- Adam -----
+        self.t += 1
+
+        # 1) 1차 모멘트(m)
+        self.m_W = beta1 * self.m_W + (1 - beta1) * self.dW
+        self.m_b = beta1 * self.m_b + (1 - beta1) * self.db
+
+        # 2) 2차 모멘트(v)
+        self.v_W = beta2 * self.v_W + (1 - beta2) * (self.dW**2)
+        self.v_b = beta2 * self.v_b + (1 - beta2) * (self.db**2)
+
+        # 3) bias correction
+        m_W_hat = self.m_W / (1 - beta1**self.t)
+        v_W_hat = self.v_W / (1 - beta2**self.t)
+
+        m_b_hat = self.m_b / (1 - beta1**self.t)
+        v_b_hat = self.v_b / (1 - beta2**self.t)
+
+        # 4) 파라미터 업데이트
+        self.W -= lr * m_W_hat / (torch.sqrt(v_W_hat) + eps)
+        self.b -= lr * m_b_hat / (torch.sqrt(v_b_hat) + eps)
 
 
 class ConvTransposed2d:
@@ -99,6 +132,16 @@ class ConvTransposed2d:
         self.x = None
         self.x_flat = None
         self.col_W = None
+
+        self.t = 0  # 타임 스텝
+
+        # Weight에 대한 m, v (모양은 W와 동일)
+        self.m_W = torch.zeros_like(self.W)
+        self.v_W = torch.zeros_like(self.W)
+
+        # Bias에 대한 m, v (모양은 b와 동일)
+        self.m_b = torch.zeros_like(self.b)
+        self.v_b = torch.zeros_like(self.b)
 
     def forward(self, x):
         # x shape : (N, C, H, W)
@@ -175,9 +218,32 @@ class ConvTransposed2d:
 
         return dx
 
-    def step(self, lr):
-        self.W -= lr * self.dW
-        self.b -= lr * self.db
+    def step(self, lr, beta1=0.9, beta2=0.999, eps=1e-8):
+        # SGD
+        # self.W -= lr * self.dW
+        # self.b -= lr * self.db
+
+        # ----- Adam -----
+        self.t += 1
+
+        # 1) 1차 모멘트(m)
+        self.m_W = beta1 * self.m_W + (1 - beta1) * self.dW
+        self.m_b = beta1 * self.m_b + (1 - beta1) * self.db
+
+        # 2) 2차 모멘트(v)
+        self.v_W = beta2 * self.v_W + (1 - beta2) * (self.dW**2)
+        self.v_b = beta2 * self.v_b + (1 - beta2) * (self.db**2)
+
+        # 3) bias correction
+        m_W_hat = self.m_W / (1 - beta1**self.t)
+        v_W_hat = self.v_W / (1 - beta2**self.t)
+
+        m_b_hat = self.m_b / (1 - beta1**self.t)
+        v_b_hat = self.v_b / (1 - beta2**self.t)
+
+        # 4) 파라미터 업데이트
+        self.W -= lr * m_W_hat / (torch.sqrt(v_W_hat) + eps)
+        self.b -= lr * m_b_hat / (torch.sqrt(v_b_hat) + eps)
 
 
 class LeakyReLU:
@@ -289,10 +355,10 @@ class DoubleConv:
         dout = self.conv1.backward(dout)
         return dout
 
-    def step(self, lr):
+    def step(self, lr, beta1=0.9, beta2=0.999, eps=1e-8):
         # 내부 컨볼루션 레이어들의 가중치 업데이트
-        self.conv1.step(lr)
-        self.conv2.step(lr)
+        self.conv1.step(lr, beta1, beta2, eps)
+        self.conv2.step(lr, beta1, beta2, eps)
 
 
 # sigmoid

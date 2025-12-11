@@ -115,8 +115,19 @@ def move_layer_to_device(layer, device):
     # 1. 기본 레이어 (Conv2d, ConvTransposed2d 등)
     if hasattr(layer, "W") and layer.W is not None:
         layer.W = layer.W.to(device)
+
+        if hasattr(layer, "m_W"):
+            layer.m_W = layer.m_W.to(device)
+        if hasattr(layer, "v_W"):
+            layer.v_W = layer.v_W.to(device)
+
     if hasattr(layer, "b") and layer.b is not None:
         layer.b = layer.b.to(device)
+
+        if hasattr(layer, "m_b"):
+            layer.m_b = layer.m_b.to(device)
+        if hasattr(layer, "v_b"):
+            layer.v_b = layer.v_b.to(device)
 
     # 2. 중첩 레이어 (DoubleConv)
     if hasattr(layer, "params"):

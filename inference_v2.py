@@ -89,7 +89,7 @@ if __name__ == "__main__":
     plt.subplot(1, 3, 1)
     plt.title("Input (Noisy Mixed)")
     plt.imshow(mixed_img, aspect="auto", origin="lower", cmap="coolwarm")
-    plt.colorbar(format="%+2.0f dB")
+    plt.colorbar(format="%+.1f dB")
     plt.xlabel("Time Frames")
     plt.ylabel("Frequency")
 
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     plt.subplot(1, 3, 2)
     plt.title("Output (Model Predicted)")
     plt.imshow(output_img, aspect="auto", origin="lower", cmap="coolwarm")
-    plt.colorbar(format="%+2.0f dB")
+    plt.colorbar(format="%+.1f dB")
     plt.xlabel("Time Frames")
     plt.ylabel("Frequency")
 
