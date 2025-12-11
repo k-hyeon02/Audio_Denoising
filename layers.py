@@ -1,193 +1,222 @@
 import torch
-from utils import *
+import torch.nn as nn
+import torch.nn.functional as F
+import components.imcol as imcol
 
-# ex) (1, 1, 256, 256), stride = 1, pad = 1
-class Conv2d:
-    def __init__(self, W, b, stride=1, pad=1):
-        # W shape : (FN, C, FH, FW)
-        self.W = W  # (16, 1, 3, 3)
-        self.b = b  # (16,)
+
+class Conv2d(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size = 3, stride = 1, pad = 1, device=None):
+        super().__init__()
+        # 가중치 초기화 using He Initialization
+        scale = torch.sqrt(torch.tensor(2.0 / (in_channels * kernel_size ** 2)))
+        self.W = nn.Parameter(torch.randn(out_channels, in_channels, kernel_size, kernel_size, device=device) * scale) # (FN, C, FH, FW)
         self.stride = stride
         self.pad = pad
 
-        # for backward
-        self.col = None
-        self.col_W = None
-        self.x_shape = None
-
     def forward(self, x):
-        FN, C, FH, FW = self.W.shape
-        N, C, H, W = x.shape
-        self.x_shape = x.shape  # for backward
+        """
+        Args:
+            x (N, C, H, W)
+        
+        Returns:
+            out (N, FN, OH, OW)
+        """
+        self.cache = x  # 역전파용 저장
+        W = self.W
 
-        # 출력 크기 계산
-        out_h = (H + 2*self.pad - FH) // self.stride + 1
-        out_w = (W + 2 * self.pad - FW) // self.stride + 1
+        N, C, H, W_in = x.shape
+        FN, C, FH, FW = W.shape
 
-        # im2col 실행
-        # col : (N * out_h * out_w, C * FH * FW)
-        col = im2col(x, FH, FW, self.stride, self.pad)  # (1*256*256, 1*9)
-        self.col = col  # for backward
+        # 1. 출력 크기 계산
+        OH = (H + 2*self.pad - FH) // self.stride + 1
+        OW = (W_in + 2*self.pad - FW) // self.stride + 1   
 
-        # 필터 전개
-        # col_W : (FN, C * FH * FW)
-        self.col_W = self.W.reshape(FN, -1)  # (16, 9)
+        out = torch.zeros((N, FN, OH, OW), device=x.device)
 
-        # 행렬 곱 + bias
-        # out = x @ W + b
-        # (N * out_h * out_w, C * FH * FW) @ (FN, C * FH * FW).T = (N * out_h * out_w, FN)
-        # (1*256*256, 9) @ (9, 16) = (1*256*256, 16)
-        # (256*256, 16) + (1, 16)
-        # torch.matmul = np.dot
-        out = torch.matmul(self.col, self.col_W.T) + self.b
+        # 2. image to column
+        col = imcol.im2col(x, FH, FW, self.stride, self.pad)  # (N*OH*OW, C*FH*FW)
 
-        # 출력 형태 복원 (feature map)
-        # out : (N * out_h * out_w, FN)
-        # -> (N, FN, out_h, out_w)
-        out = out.reshape(N, out_h, out_w, -1).permute(0,3,1,2)
+        # 3. filter to 2D
+        # (FN, C, FH, FW) -> (FN, C*FH*FW) -> (C*FH*FW, FN)
+        col_W = W.reshape(FN, -1).T    # shape : (필터 크기, 필터 개수)
+
+        # # <--- 디버깅 코드 추가 시작 --->
+        # print(f"DEBUG: Conv2d Input (col) Device: {col.device}")
+        # W = self._parameters["W"]
+        # col_W = W.reshape(FN, -1).T
+        # print(f"DEBUG: Conv2d Weight (col_W) Device: {col_W.device}")
+        # # <--- 디버깅 코드 추가 끝 --->
+
+        # 4. (데이터 개수, 필터 크기) @ (필터 크기, 필터 개수) = (데이터 개수, 필터 개수) = (N*OH*OW, FN)
+        out = col @ col_W
+
+        # 5. Reshape to 4D img
+        out = out.reshape(N, OH, OW, -1).permute(0, 3, 1, 2).contiguous()    # (N, FN, OH, OW) 채널이 FN으로 바뀐다.
+
+        self.cache = (x, col, col_W)
 
         return out
 
-    def backward(self, dout):
-        FN, C, FH, FW = self.W.shape
+    # def backward(self, dout):
+    #     """
+    #     Args:
+    #         dout (N, FN, OH, OW)
+        
+    #     Returns:
+    #         dx (N, C, H, W)
+    #     """
+    #     W = self._parameters['W']
+    #     x, col, col_W = self.cache
+    #     FN, C, FH, FW = W.shape
 
-        # 1. bias 기울기 : 채널별로 합산
-        # dout shape : (N, FN, out_h, out_w) -> (N * out_h * out_w, FN)
-        # ex) (1, 16, 256, 256) -> (1*256*256, 16)
-        dout = dout.permute(0,2,3,1).reshape(-1, FN)
-        self.db = torch.sum(dout, dim=0)  # (FN,) = (16,)
+    #     # dout을 행렬곱을 위해 펼친다.
+    #     # (F, FN, OH, OW) -> (N, OH, OW, FN) -> (N*OH*OW, FN)
+    #     dout =  dout.permute(0, 2, 3, 1).contiguous().reshape(-1, FN)
 
-        # 2. Weight의 기울기 (행렬 곱)
-        # dW = col.T @ dout
-        # col : (N * out_h * out_w, C * FH * FW)
-        # dout : (N * out_h * out_w, FN)
-        # dW : (C * FH * FW, FN)
-        # (1*256*256, 9).T @ (1*256*256, 16)
-        self.dW = torch.matmul(self.col.T, dout)  # (9, 16)
-        self.dW = self.dW.T.reshape(FN, C, FH, FW)  # 원래 필터 모양으로 복구 (16, 1, 3, 3)
+    #     # dW = x.T @ dout
+    #     dW = col.T @ dout
+    #     # (C*FH*FW, FN) -> (FN, C, FH, FW)
+    #     self.grads['W'] = dW.permute(1, 0).contiguous().reshape(FN, C, FH, FW)
 
-        # 3. 입력(x) 데이터 기울기 (dcol -> dx)
-        # dcol = dout @ W.T
-        # dout : (N * out_h * out_w, FN)
-        # col_W: (FN, C * FH * FW)
-        # (N * out_h * out_w, FN) @ (FN, C * FH * FW) = (N * out_h * out_w, C * FH * FW)
-        # dcol : (N * out_h * out_w, C * FH * FW)
-        col_W = self.col_W  # (16, 9)
-        dcol = torch.matmul(dout, col_W)  # (256*256, 9)
+    #     # dcol = dout @ W.T
+    #     dcol = dout @ col_W.T
 
-        # dcol : (N * out_h * out_w, C * FH * FW)
-        # -> im2col 출력 shape : (N * out_h * out_w, C * FH * FW)
-        # -> col2im : (N, C, H, W)
-        dx = col2im(dcol, self.x_shape, FH, FW, self.stride, self.pad)
+    #     # col2im으로 이미지 크기 복원
+    #     dx = imcol.col2im(dcol, x.shape, FH, FW, self.stride, self.pad)
 
-        return dx
-    
-    def step(self, lr):
-        self.W -= lr * self.dW
-        self.b -= lr * self.db
+    #     return dx
 
+# H = 32
+# stride=2
+# pad=1
+# FH=4
+# out_h = (H - 1) * stride - 2 * pad + FH
+# print(out_h)
+class ConvTranspose2d(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size = 4, stride = 2, pad = 1, device=None):
+        super().__init__()
+        # 가중치 초기화 using He Initialization
+        scale = torch.sqrt(torch.tensor(2.0 / (in_channels * kernel_size ** 2)))
+        self.W = nn.Parameter(torch.randn(in_channels, out_channels, kernel_size, kernel_size, device=device) * scale) # (C, FN, FH, FW)
 
-class ConvTransposed2d:
-    def __init__(self, W, b, stride=2, pad=1, output_pad=1):
-        self.W = W
-        self.b = b
         self.stride = stride
         self.pad = pad
-        self.output_pad = output_pad
-
-        # for backward
-        self.x = None
-        self.x_flat = None
-        self.col_W = None
 
     def forward(self, x):
-        # x shape : (N, C, H, W)
+        """
+        [Forward 원리]
+        입력 x를 펴서(flatten), 가중치와 곱한 뒤,
+        col2im을 사용해 겹치는 부분을 더해가며 큰 이미지를 만듭니다.
+        """
+        W_param = self.W
         N, C, H, W = x.shape
-        # W shape : (C, FN, FH, FW)
-        # C : 입력 데이터의 채널 수
-        # FN : 출력 데이터의 채널 수
-        # Conv2d 와 shape이 다른 이유 : ConvTransposed2d는 Conv2d의 역전파 과정과 같다
-        C, FN, FH, FW = self.W.shape
-        self.x = x  # for backward
-
-        # 출력 크기 계선 (Conv2d의 역연산)
-        out_h = (H - 1) * self.stride - 2 * self.pad + FH + self.output_pad
-        out_w = (W - 1) * self.stride - 2 * self.pad + FW + self.output_pad
+        C, FN, FH, FW = W_param.shape
+        
+        # 1. 출력 크기 계산
+        out_h = (H - 1) * self.stride - 2 * self.pad + FH
+        out_w = (W - 1) * self.stride - 2 * self.pad + FW
+        
         out_shape = (N, FN, out_h, out_w)
-
-        # 가중치와 입력 행렬 곱 (Conv2d의 backward 연산)
-        # W : (C, FN, FH, FW) -> col_W : (C, FN * FH * FW)
-        col_W = self.W.reshape(C, -1)
-
-        # x = (N, C, H, W) -> (N * H * W, C)
-        x_flat = x.permute(0,2,3,1).reshape(-1, C)
-        self.x_flat = x_flat  # for backward
-
-        # 행렬 곱 : out = col_W @ x.T
-        # : (N * H * W, FN * FH * FW)
-        out = torch.matmul(x_flat, col_W)
-
-        # col2im 통해 이미지 형태로 복원
-        # out은 이미 col2im의 입력 형태 : (N * H * W, FN * FH * FW)
-        # -> shape : (N, FN ,H ,W)
-        out = col2im(out, out_shape, FH, FW, self.stride, self.pad)
-
-        # bias 더하기 (broadcasting)
-        out += self.b.reshape(1, FN, 1, 1)
-
+        # 2. 입력 x 변형 (행렬 곱을 위해)
+        # (N, C, H, W) -> (N, H, W, C) -> (N*H*W, C)
+        # 여기서 C는 in_channels입니다.
+        x_flat = x.permute(0, 2, 3, 1).contiguous().reshape(-1, C)
+        
+        # 3. 가중치 변형
+        # (In, Out, KH, KW) -> (In, Out*KH*KW)
+        col_W = W_param.reshape(C, -1)
+        
+        # 4. 행렬 곱 (Convolution의 역연산)
+        # (N*H*W, C) @ (C, FN*FH*FW) -> (N*H*W, FN*FH*FW)
+        out = x_flat @ col_W
+        
+        # 5. col2im으로 이미지 복원 (작은 이미지 -> 큰 이미지)
+        # out_col을 다시 (N, Out, OH, OW) 형태로 조립합니다.
+        out = imcol.col2im(out, out_shape, FH, FW, self.stride, self.pad)
+        
+        # 역전파를 위해 저장
+        self.cache = (x, x_flat, col_W)
+        
         return out
 
-    def backward(self, dout):
-        # out : (N, FN, OH, OW)
-        N, FN, OH, OW = dout.shape
-        C, FN, FH, FW = self.W.shape
-        N, C, H ,W = self.x.shape
+    # def backward(self, dout):
+    #     W_param = self._parameters['W']
+      
+    #     C, FN, FH, FW = W_param.shape
+    #     x, x_flat, col_W = self.cache
+    #     N, C, H ,W = x.shape
 
-        # 1. db
-        # (N, FN, OH, OW) -> (FN, N * OH * OW)
-        self.db = torch.sum(dout, dim=(0,2,3))
+    #     # 2. dW
+    #     # dout을 im2col로 전개
+    #     # col_dout : (N * OH * OW, FN * FH * FW)
+    #     col_dout = imcol.im2col(dout, FH, FW, self.stride, self.pad)
 
-        # 2. dW
-        # dout을 im2col로 전개
-        # col_dout : (N * OH * OW, FN * FH * FW)
-        col_dout = im2col(dout, FH, FW, self.stride, self.pad)
+    #     # dW = x_flat.T * col_dout
+    #     # 헹렬 곱을 위해 reshape
+    #     # x_flat : (N * H * W, C) -> transpose
+    #     # (C, N * H * W) @ (N * OH * OW, FN * FH * FW)
+    #     # = (C, FN * FH * FW)
+    #     dW_flat = x_flat.T @ col_dout
+    #     self.dW = dW_flat.reshape(C, FN, FH, FW)  # 원래 모양으로 복구  
 
-        # dW = x_flat.T * col_dout
-        # 헹렬 곱을 위해 reshape
-        # x_flat : (N * H * W, C) -> transpose
-        # (C, N * H * W) @ (N * OH * OW, FN * FH * FW)
-        # = (C, FN * FH * FW)
-        dW_flat = torch.matmul(self.x_flat.T, col_dout)
-        self.dW = dW_flat.reshape(C, FN, FH, FW)  # 원래 모양으로 복구  
+    #     # 3. dx
+    #     # dx = col_dout @ W.T
+    #     # col_dout : (N * OH * OW, FN * FH * FW)
+    #     # W : (C, FN, FH, FW) -> (FN * FH * FW, C)
+    #     col_W_T = W_param.reshape(C, -1).T
 
-        # 3. dx
-        # dx = col_dout @ W.T
-        # col_dout : (N * OH * OW, FN * FH * FW)
-        # W : (C, FN, FH, FW) -> (FN * FH * FW, C)
-        col_W_T = self.W.reshape(C, -1).T
+    #     # (N * OH * OW, FN * FH * FW) @ (FN * FH * FW, C)
+    #     # = (N * OH * OW, C)
+    #     dx_flat = torch.matmul(col_dout, col_W_T)
 
-        # (N * OH * OW, FN * FH * FW) @ (FN * FH * FW, C)
-        # = (N * OH * OW, C)
-        dx_flat = torch.matmul(col_dout, col_W_T)
-
-        # 원래 크기로 복원
-        dx = dx_flat.reshape(N, H, W, C).permute(0, 3, 1, 2)
+    #     # 원래 크기로 복원
+    #     dx = dx_flat.reshape(N, H, W, C).permute(0, 3, 1, 2)
 
         return dx
+if __name__ == "__main__":
+    t1 = torch.randn(3, 64, 32, 32)
+    t2 = torch.randn(3, 32, 64, 64)
+    test = ConvTranspose2d(64, 32, kernel_size=4)
+    res1 = test.forward(t1)
+    res2 = test.backward(t2)
+    print(res1.shape)
+    print(res2.shape)
 
-    def step(self, lr):
-        self.W -= lr * self.dW
-        self.b -= lr * self.db
+# Activation
 
+class sigmoid(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, x):
+        return 1 / (1 + torch.exp(x))
+    
+    def backward(self, dout):
+        
+        return 
+
+class ReLU(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mask = None
+
+    def forward(self, x):
+        self.mask = (x <= 0)    # 0 이하인 인덱스 저장
+        out = x.clone()
+        out[self.mask] = 0
+        return out
+    
+    def backward(self, dout):
+        dout[self.mask] = 0
+        return dout
 
 class LeakyReLU:
     def __init__(self, slope=0.01):
         self.slope = slope
         self.mask = None
-
     def forward(self, x):
         # x가 0이하인 인덱스 저장(True/False)
-        self.mask = (x <= 0)
+        self.mask = x <= 0
         out = x.clone()
         out[self.mask] *= self.slope
 
@@ -204,9 +233,8 @@ class LeakyReLU:
 
         return dx
 
-    def step(self, lr):
-        pass  # 업데이트할 가중치 X
 
+# skip connection
 
 class Concat:
     """
@@ -238,79 +266,6 @@ class Concat:
         return dx1, dx2
 
 
-class DoubleConv:
-    """
-    (Conv -> LeakyReLU) * 2 구조를 하나의 레이어
-    """
-
-    def __init__(self, in_ch, out_ch, f_size = 3, mid_ch=None):
-        if mid_ch is None:
-            mid_ch = out_ch
-
-        # 2. He Initialization을 위한 Fan-in 면적 계산
-        # 3x3이면 9, 5x5면 25
-        self.f_area = f_size * f_size
-
-        # 첫 번째 합성곱 (채널 수 변경: in -> mid)
-        self.conv1 = Conv2d(
-            he_init(in_ch * self.f_area, (mid_ch, in_ch, f_size, f_size)),
-            torch.zeros(mid_ch),
-            stride=1,
-            pad=1,
-        )
-        self.act1 = LeakyReLU()
-
-        # 두 번째 합성곱 (채널 수 유지: mid -> out)
-        self.conv2 = Conv2d(
-            he_init(mid_ch * self.f_area, (out_ch, mid_ch, f_size, f_size)),
-            torch.zeros(out_ch),
-            stride=1,
-            pad=1,
-        )
-        self.act2 = LeakyReLU()
-
-        # Optimizer용 파라미터 리스트
-        self.params = [self.conv1, self.conv2]
-
-    def forward(self, x):
-        # x -> Conv1 -> Act1 -> Conv2 -> Act2
-        out = self.conv1.forward(x)
-        out = self.act1.forward(out)
-        out = self.conv2.forward(out)
-        out = self.act2.forward(out)
-        return out
-
-    def backward(self, dout):
-        # 역순으로 전파
-        # Act2 -> Conv2 -> Act1 -> Conv1
-        dout = self.act2.backward(dout)
-        dout = self.conv2.backward(dout)
-        dout = self.act1.backward(dout)
-        dout = self.conv1.backward(dout)
-        return dout
-
-    def step(self, lr):
-        # 내부 컨볼루션 레이어들의 가중치 업데이트
-        self.conv1.step(lr)
-        self.conv2.step(lr)
-
-
-# sigmoid
-class Sigmoid:
-    def __init__(self):
-        self.out = None
-
-    def forward(self, x):
-        # y = 1 / (1 + e^-x)
-        self.out = 1 / (1 + torch.exp(-x))
-        return self.out
-    
-    def backward(self, dout):
-        # sigmoid 미분 : y * (1 - y)
-        dx = dout * self.out * (1.0 - self.out)
-        return dx
-
-
 # 손실함수 (MSE)
 class MSELoss:
     def __init__(self):
@@ -320,34 +275,109 @@ class MSELoss:
     def forward(self, y, t):
         self.diff = y - t
         self.N = y.numel()  # 전체 요소 개수
-        loss = torch.sum(self.diff ** 2)/self.N
+        loss = torch.sum(self.diff**2) / self.N
 
         return loss
-    
+
     def backward(self):
         # MSE 미분 : 2(y - t)/N
         dout = 2 * self.diff / self.N
-        
-        return dout 
-
-
-# 손실함수 (L1 Loss)
-# L1 = |y - t| / N
-class L1Loss:
-    def __init__(self):
-        self.diff = None
-        self.N = None
-
-    def forward(self, y, t):
-        self.diff = y - t
-        self.N = y.numel()
-        loss = torch.sum(torch.abs(self.diff)) / self.N
-
-        return loss
-
-    def backward(self):
-        # 미분 : (1/N) * sign(pred - target)
-        grad_direction = torch.sign(self.diff)
-        dout = grad_direction / self.N
 
         return dout
+
+
+# Batch Normal
+
+# class BatchNorm(Module):        # 사용 x
+#     def __init__(self, num_features, eps=1e-5, momentum=0.9):
+#         super().__init__()
+#         self.num_features = num_features
+#         self.eps = eps
+#         self.momentum = momentum
+
+#         # 학습 가능한 파라미터
+#         self._parameters['gamma'] = np.ones((num_features, 1))      # scale
+#         self._parameters['beta'] = np.zeros((num_features, 1))      # shift
+
+#         # gradient 저장 공간
+#         self.grads['gamma'] = np.zeros_like(self._parameters['gamma'])
+#         self.grads['beta'] = np.zeros_like(self._parameters['beta'])
+
+#         # moving average (평가모드에서 사용)
+#         self.moving_mean = np.zeros((num_features, 1))
+#         self.moving_var = np.ones((num_features, 1))
+
+#     def forward(self, x):
+#         # x shape: (batch_size, num_features) 또는 (batch_size, num_features, height, width)
+#         # 여기서는 2D 입력 가정 (batch_size, num_features)
+#         self.cache = x.copy()
+#         batch_size = x.shape[0]
+
+#         if self._train_mode:
+#             # 학습 모드: 배치 통계 사용
+#             mu = np.mean(x, axis=0, keepdims=True)
+#             var = np.var(x, axis=0, keepdims=True)
+
+#             # moving average 업데이트
+#             self.moving_mean = (self.momentum * self.moving_mean +
+#                               (1 - self.momentum) * mu)
+#             self.moving_var = (self.momentum * self.moving_var +
+#                              (1 - self.momentum) * var)
+
+#             # 정규화
+#             x_norm = (x - mu) / np.sqrt(var + self.eps)
+#             out = self._parameters['gamma'] * x_norm + self._parameters['beta']
+
+#             # backward에서 사용하기 위해 cache 저장
+#             self.cache = (x, mu, var, x_norm)
+
+#         else:
+#             # 평가 모드: moving average 사용
+#             x_norm = (x - self.moving_mean) / np.sqrt(self.moving_var + self.eps)
+#             out = self._parameters['gamma'] * x_norm + self._parameters['beta']
+
+#         return out
+
+#     def backward(self, dout):
+#         # dout shape: 입력과 같은 shape
+#         x, mu, var, x_norm = self.cache
+
+#         # gamma, beta gradient 계산
+#         batch_size = x.shape[0]
+#         self.grads['gamma'] = np.sum(dout * x_norm, axis=0, keepdims=True)
+#         self.grads['beta'] = np.sum(dout, axis=0, keepdims=True)
+
+#         # 입력 x에 대한 gradient 계산
+#         dx_norm = dout * self._parameters['gamma']
+#         dvar = np.sum(dx_norm * (x - mu) * -0.5 * (var + self.eps) ** -1.5, axis=0, keepdims=True)
+#         dmu = np.sum(dx_norm * -1 / np.sqrt(var + self.eps), axis=0, keepdims=True) + \
+#               np.sum(dvar * -2 * (x - mu) / batch_size, axis=0, keepdims=True)
+#         dx = dx_norm / np.sqrt(var + self.eps) + \
+#              2 * dvar * (x - mu) / batch_size + \
+#              dmu / batch_size
+
+#         return dx
+
+
+# # --- 테스트 ---
+# if __name__ == "__main__":
+#     # 1. 입력 데이터 (배치 1, 채널 3, 16x16 이미지)
+#     x = np.random.randn(1, 3, 16, 16)
+
+#     # 2. Transpose Conv 레이어 생성 (채널 3->16, 2배 확대)
+#     # Stride=2를 줘야 2배로 커집니다.
+#     t_conv = ConvTranspose2d(in_channels=3, out_channels=16, kernel_size=2, stride=2, pad=0)
+
+#     # 3. 순전파
+#     out = t_conv.forward(x)
+#     print(f"Input Shape:  {x.shape}")
+#     print(f"Output Shape: {out.shape}")
+
+#     # 예상 결과: 16x16 -> 32x32
+#     # Output H = (16-1)*2 - 0 + 2 = 32
+
+#     # 4. 역전파
+#     dout = np.random.randn(*out.shape)
+#     dx = t_conv.backward(dout)
+#     print(f"Grad Input(dx) Shape: {dx.shape}")
+#     print(f"Grad Weight(dW) Shape: {t_conv.grads['W'].shape}")

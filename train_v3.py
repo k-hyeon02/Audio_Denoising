@@ -1,4 +1,5 @@
 import torch
+import torch.optim as optim
 from torch.utils.data import DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,15 +7,15 @@ from tqdm import tqdm
 import os
 import sys
 
-from unet_v2 import UNet
+from unet_v4 import UNet
 from layers import *
 from utils import *
-from train_dataset.train_dataset import NoiseRemovalDataset
+from train_dataset.train_data import NoiseRemovalDataset
 
 # 하이퍼파라미터 설정
 LR = 0.0001
 EPOCHS = 10
-BATCH_SIZE = 16  # 서버용 배치 사이즈
+BATCH_SIZE = 4  # 서버용 배치 사이즈
 
 # 경로 설정 (본인의 환경에 맞게 수정 필요)
 CLEAN_DIR = "./data/LibriSpeech/train-clean-100/"
@@ -55,11 +56,13 @@ def train():
     print(f"Train Samples : {len(train_dataset)} | Val Samples : {len(val_dataset)}")
 
     # 2. 모델 생성
-    model = UNet(channels=[1, 32, 64, 128, 256, 512], filter_size=3)
+    model = UNet(channels=[1, 32, 64, 128, 256, 512], device=device)
+    model.to(device)
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
     # model을 device로 이동
-    move_model_to_device(model, device)
-    loss_func = L1Loss()
+
+    loss_func = F.l1_loss
 
     # 로스 기록
     history = {"train_loss": [], "val_loss": [], "train_psnr": [], "val_psnr": []}
@@ -74,21 +77,22 @@ def train():
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS} : [Train]")
 
         for mixed, clean, _ in pbar:
+            optimizer.zero_grad()
             x = mixed.to(device)
             t = clean.to(device)
 
             # forward
-            y = model.forward(x)
+            y = model(x)
 
             # loss
-            loss = loss_func.forward(y, t)
+            loss = loss_func(y, t)
 
             # backward
-            dout = loss_func.backward()
-            model.backward(dout)
+            loss.backward()
+            
 
             # 가중치 업데이트
-            model.step(lr=LR)
+            optimizer.step()
 
             # PSNR 계산
             psnr = calculate_psnr(y, t)
@@ -115,8 +119,8 @@ def train():
             t = clean.to(device)
 
             # forward
-            y = model.forward(x)
-            loss = loss_func.forward(y, t)
+            y = model(x)
+            loss = loss_func(y, t)
             psnr = calculate_psnr(y, t)
 
             val_loss_sum += loss.item()

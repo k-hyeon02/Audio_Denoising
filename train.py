@@ -6,7 +6,7 @@ from tqdm import tqdm  # 진행률 표시바
 import os
 
 # 우리가 만든 모듈들 임포트
-from train_dataset.train_dataset import NoiseRemovalDataset
+from train_dataset.train_data import NoiseRemovalDataset
 from unet import UNetDenoise
 
 # --- 하이퍼파라미터 설정 (실험 조건) ---

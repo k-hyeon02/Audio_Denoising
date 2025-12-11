@@ -127,7 +127,7 @@ def move_layer_to_device(layer, device):
 def move_model_to_device(model, device):
     """UNet 전체 파라미터 이동"""
     print(f"Moving model to {device}...")
-    for module in model.modules:
+    for module in model.modules():
         move_layer_to_device(module, device)
 
 

@@ -4,9 +4,12 @@ import torchaudio
 import glob
 import random
 import os
-
-from .audio_mixer import AudioMixer
-from .spectrogram import Spectrogram
+if __name__ == "__main__":
+    import audio_mixer as audio
+    import spectrogram as spect
+else:
+    import train_dataset.audio_mixer as audio
+    import train_dataset.spectrogram as spect
 
 
 class NoiseRemovalDataset(Dataset):
@@ -39,8 +42,8 @@ class NoiseRemovalDataset(Dataset):
             raise ValueError("mode는 'train'/'val' 이어야 함")
 
         # 도구(Tools) 초기화
-        self.mixer = AudioMixer(target_frame=target_frame, hop_length=hop_length)
-        self.spec_processor = Spectrogram(n_fft=512, hop_length=hop_length)
+        self.mixer = audio.AudioMixer(target_frame=target_frame, hop_length=hop_length)
+        self.spec_processor = spect.Spectrogram(n_fft=512, hop_length=hop_length)
 
     def __len__(self):
         # 전체 학습 데이터 수 (클린 파일 개수 기준)

@@ -6,7 +6,7 @@ import os
 
 from unet_v2 import UNet
 from utils import *
-from train_dataset.train_dataset import *
+from train_dataset.train_data import *
 
 
 # --- 가중치 로드 함수 ---

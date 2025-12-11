@@ -9,7 +9,7 @@ import sys
 from unet_v2 import UNet
 from layers import *
 from utils import *
-from train_dataset.train_dataset import NoiseRemovalDataset
+from train_dataset.train_data import NoiseRemovalDataset
 
 # 하이퍼파라미터 설정
 LR = 0.0001  

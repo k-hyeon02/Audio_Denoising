@@ -4,7 +4,7 @@ class Module:
     def __init__(self):
         self._train_mode = True
 
-        self.params = {}    # 가중치 저장
+        self._parameters = {}    # 가중치 저장
         self.grads = {}     # 가중치 미분값 저장
         self.cache = None   # forward때 입력값 저장
     
@@ -24,7 +24,7 @@ class Module:
         """
         params_list = []
 
-        for val in self.params.values():
+        for val in self._parameters.values():
             params_list.append(val)
         
         for key, value in self.__dict__.items():
