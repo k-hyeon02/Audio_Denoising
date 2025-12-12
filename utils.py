@@ -102,98 +102,55 @@ def he_init(fan_in, shape):
 def get_device():
     """장치 자동 감지: Mac(MPS), NVIDIA(CUDA), CPU 순서"""
     if torch.backends.mps.is_available():
+        print("mps available")
         return torch.device("mps")
     elif torch.cuda.is_available():
+        print("cuda available")
         return torch.device("cuda")
     else:
+        print("only cpu available")
         return torch.device("cpu")
 
 
-# 모델 gpu 이동 및 저장
-def move_layer_to_device(layer, device):
-    """레이어 내부의 W, b를 찾아 디바이스로 이동"""
-    # 1. 기본 레이어 (Conv2d, ConvTransposed2d 등)
-    if hasattr(layer, "W") and layer.W is not None:
-        layer.W = layer.W.to(device)
-    if hasattr(layer, "b") and layer.b is not None:
-        layer.b = layer.b.to(device)
+# 모델 gpu 이동 및 저장     / model.to(device) 사용
+# def move_layer_to_device(layer, device):
+#     """레이어 내부의 W, b를 찾아 디바이스로 이동"""
+#     # 1. 기본 레이어 (Conv2d, ConvTransposed2d 등)
+#     if hasattr(layer, "W") and layer.W is not None:
+#         layer.W = layer.W.to(device)
+#     if hasattr(layer, "b") and layer.b is not None:
+#         layer.b = layer.b.to(device)
 
-    # 2. 중첩 레이어 (DoubleConv)
-    if hasattr(layer, "params"):
-        for sub_layer in layer.params:
-            move_layer_to_device(sub_layer, device)
+#     # 2. 중첩 레이어 (DoubleConv)
+#     if hasattr(layer, "params"):
+#         for sub_layer in layer.params:
+#             move_layer_to_device(sub_layer, device)
 
 
-def move_model_to_device(model, device):
-    """UNet 전체 파라미터 이동"""
-    print(f"Moving model to {device}...")
-    for module in model.modules():
-        move_layer_to_device(module, device)
+# def move_model_to_device(model, device):
+#     """UNet 전체 파라미터 이동"""
+#     print(f"Moving model to {device}...")
+#     for module in model.modules():
+#         move_layer_to_device(module, device)
 
 
 # 가중치 저장
 def save_checkpoint(model, save_dir, filename):
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir, exist_ok=True)
-
+    os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, filename)
 
-    checkpoint = {}
+    torch.save(model.state_dict(), save_path)
+    print(f"Checkpoint saved to: {save_path}")
 
-    for i, module in enumerate(model.modules):
-        # DoubleConv 처리
-        if hasattr(module, "params"):
-            for j, sub in enumerate(module.params):
-                checkpoint[f"{i}_{type(module).__name__}_sub{j}"] = {
-                    "W": sub.W.cpu(),
-                    "b": sub.b.cpu(),
-                }
-        # 단일 레이어 처리
-        elif hasattr(module, "W"):
-            checkpoint[f"{i}_{type(module).__name__}"] = {
-                "W": module.W.cpu(),
-                "b": module.b.cpu(),
-            }
-
-    torch.save(checkpoint, save_path)
 
 
 # 저장한 가중치 불러오기
-def load_checkpoint(model, checkpoint_path, device):
-    """
-    커스텀 save_checkpoint로 저장된 가중치를 모델에 로드하는 함수
-    """
-    if not os.path.exists(checkpoint_path):
-        print(f"⚠️ 파일이 없습니다: {checkpoint_path}")
-        return None
-
-    print(f"🔄 가중치 로딩 중... ({checkpoint_path})")
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-
-    # 모델의 모듈 리스트를 순회하며 저장된 값을 찾아 대입
-    for i, module in enumerate(model.modules):
-        # 1. DoubleConv와 같이 내부에 params 리스트가 있는 경우
-        if hasattr(module, "params"):
-            for j, sub in enumerate(module.params):
-                key = f"{i}_{type(module).__name__}_sub{j}"
-                if key in checkpoint:
-                    # 저장된 텐서를 현재 장치(device)로 이동시켜서 대입
-                    sub.W = checkpoint[key]["W"].to(device)
-                    sub.b = checkpoint[key]["b"].to(device)
-                else:
-                    print(f"⚠️ Warning: {key} not found in checkpoint.")
-
-        # 2. Conv2d, FinalConv 등 단일 레이어인 경우
-        elif hasattr(module, "W"):
-            key = f"{i}_{type(module).__name__}"
-            if key in checkpoint:
-                module.W = checkpoint[key]["W"].to(device)
-                module.b = checkpoint[key]["b"].to(device)
-            else:
-                print(f"⚠️ Warning: {key} not found in checkpoint.")
-
-    print("✅ 모델 로드 완료!")
+def load_checkpoint(model, load_path, device):
+    checkpoint = torch.load(load_path, map_location=device)
+    model.load_state_dict(checkpoint)
+    print(f"Checkpoint loaded from: {load_path}")
     return model
+
 
 
 # PSNR 계산 : PSNR = 10 * log10(MAX^2 / MSE)

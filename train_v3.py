@@ -20,7 +20,7 @@ BATCH_SIZE = 4  # 서버용 배치 사이즈
 # 경로 설정 (본인의 환경에 맞게 수정 필요)
 CLEAN_DIR = "./data/LibriSpeech/train-clean-100/"
 NOISE_DIR = "./data/noise_datasets/audio/"
-SAVE_DIR = "./checkpoints_3/"
+SAVE_DIR = "./checkpoints/"
 
 device = get_device()
 
