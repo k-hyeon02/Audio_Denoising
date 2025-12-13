@@ -5,7 +5,7 @@ UNET_CHANNELS = [1, 32, 64, 128, 256, 512]
 
 
 class UNet:
-    def __init__(self, channels=None, filter_size=3):
+    def __init__(self, channels=None, filter_size=3, up_filter_size=2):
         if channels is None:
             channels = UNET_CHANNELS
 
@@ -68,9 +68,7 @@ class UNet:
 
         # Layer 4 : 512 -> 256
         self.up4 = ConvTransposed2d(
-            he_init(
-                c_bot * filter_size * filter_size, (c_bot, c4, filter_size, filter_size)
-            ),
+            he_init(c_bot * up_filter_size * up_filter_size,(c_bot, c4, up_filter_size, up_filter_size),),
             torch.zeros(c4),
         )
         self.cat4 = Concat()
@@ -79,7 +77,7 @@ class UNet:
 
         # Layer 3 : 256 -> 128
         self.up3 = ConvTransposed2d(
-            he_init(c4 * filter_size * filter_size, (c4, c3, filter_size, filter_size)),
+            he_init(c4 * up_filter_size * up_filter_size, (c4, c3, up_filter_size, up_filter_size)),
             torch.zeros(c3),
         )
         self.cat3 = Concat()
@@ -87,7 +85,7 @@ class UNet:
 
         # Layer 2 : 128 -> 64
         self.up2 = ConvTransposed2d(
-            he_init(c3 * filter_size * filter_size, (c3, c2, filter_size, filter_size)),
+            he_init(c3 * up_filter_size * up_filter_size, (c3, c2, up_filter_size, up_filter_size)),
             torch.zeros(c2),
         )
         self.cat2 = Concat()
@@ -95,7 +93,7 @@ class UNet:
 
         # Layer 1 : 64 -> 32
         self.up1 = ConvTransposed2d(
-            he_init(c2 * filter_size * filter_size, (c2, c1, filter_size, filter_size)),
+            he_init(c2 * up_filter_size * up_filter_size, (c2, c1, up_filter_size, up_filter_size)),
             torch.zeros(c1),
         )
         self.cat1 = Concat()

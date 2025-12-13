@@ -121,7 +121,7 @@ class Conv2d:
 
 
 class ConvTransposed2d:
-    def __init__(self, W, b, stride=2, pad=1, output_pad=1):
+    def __init__(self, W, b, stride=2, pad=0, output_pad=0):
         self.W = W
         self.b = b
         self.stride = stride

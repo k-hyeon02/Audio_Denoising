@@ -4,9 +4,7 @@ import torch.nn as nn
 
 class CBR(nn.Module):
     """
-    [정밀 분석 단계]
-    구조: Conv(S=1) -> BN -> ReLU -> Conv(S=1) -> BN -> ReLU
-    역할: 해상도를 유지하며 특징을 깊게 추출 (Skip Connection용 데이터 생성)
+    구조: Conv(S=1) -> LeakyReLU -> Conv(S=1) -> LeakyReLU
     """
 
     def __init__(self, in_channels, out_channels):
@@ -14,12 +12,10 @@ class CBR(nn.Module):
         self.layer = nn.Sequential(
             # 첫 번째 합성곱 (특징 추출 1차)
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             # 두 번째 합성곱 (특징 추출 2차 & 비선형성 강화)
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, stride=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
         )
 
     def forward(self, x):
@@ -28,69 +24,74 @@ class CBR(nn.Module):
 
 class DownSample(nn.Module):
     """
-    [압축 및 요약 단계]
-    구조: Conv(S=2) -> BN -> ReLU
-    역할: 해상도를 절반으로 줄이면서(Downsampling) 정보를 요약
+    구조: Conv(S=2) -> LeakyReLU
     """
 
     def __init__(self, in_channels, out_channels):
         super(DownSample, self).__init__()
         self.layer = nn.Sequential(
-            # Stride=2 합성곱 (학습 가능한 다운샘플링)
+            # Stride=2 합성곱
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=2),
-            nn.BatchNorm2d(out_channels),  # 데이터 분포 정규화 (Zero-point calibration)
-            nn.ReLU(inplace=True),  # 노이즈 필터링
+            nn.LeakyReLU(inplace=True),  # 노이즈 필터링
         )
 
     def forward(self, x):
         return self.layer(x)
 
 
-class UNetDenoise(nn.Module):
-    def __init__(self):
-        super(UNetDenoise, self).__init__()
+UNET_CHANNELS = [1, 32, 64, 128, 256, 512]
+
+class UNet(nn.Module):
+
+    def __init__(self, channels=None):
+        super(UNet, self).__init__()
+
+        channels = UNET_CHANNELS
+
+        c_in, c1, c2, c3, c4, c_bot = channels
 
         # --- Encoder (Downsampling Path) ---
-        # Level 1: Input(1) -> 64
-        self.enc1 = CBR(1, 64)  # 분석: (1, 256, 256) -> (64, 256, 256) ★Skip1
-        self.down1 = DownSample(64, 64)  # 압축: (64, 256, 256) -> (64, 128, 128)
+        # Level 1: Input(1) -> 32
+        self.enc1 = CBR(c_in, c1)  # 분석: (1, 128, 128) -> (32, 128, 128) ★Skip1
+        self.down1 = DownSample(c1, c1)  # 압축: (32, 128, 128) -> (32, 64, 64)
 
-        # Level 2: 64 -> 128
-        self.enc2 = CBR(64, 128)  # 분석: (64, 128, 128) -> (128, 128, 128) ★Skip2
-        self.down2 = DownSample(128, 128)  # 압축: (128, 128, 128) -> (128, 64, 64)
+        # Level 2: 32 -> 64
+        self.enc2 = CBR(c1, c2)  # 분석: (32, 64, 64) -> (64, 64, 64) ★Skip2
+        self.down2 = DownSample(c2, c2)  # 압축: (64, 64, 64) -> (64, 32, 32)
 
-        # Level 3: 128 -> 256
-        self.enc3 = CBR(128, 256)  # 분석: (128, 64, 64) -> (256, 64, 64) ★Skip3
-        self.down3 = DownSample(256, 256)  # 압축: (256, 64, 64) -> (256, 32, 32)
+        # Level 3: 64 -> 128
+        self.enc3 = CBR(c2, c3)  # 분석: (64, 32, 32) -> (128, 32, 32) ★Skip3
+        self.down3 = DownSample(c3, c3)  # 압축: (128, 32, 32) -> (128, 32, 32)
 
-        # Level 4: 256 -> 512
-        self.enc4 = CBR(256, 512)  # 분석: (256, 32, 32) -> (512, 32, 32) ★Skip4
-        self.down4 = DownSample(512, 512)  # 압축: (512, 32, 32) -> (512, 16, 16)
+        # Level 4: 128 -> 256
+        self.enc4 = CBR(c3, c4)  # 분석: (128, 32, 32) -> (256, 32, 32) ★Skip4
+        self.down4 = DownSample(c4, c4)  # 압축: (256, 32, 32) -> (256, 16, 16)
 
         # --- Bottleneck (Latent Space) ---
         # 가장 깊은 곳: 소리의 '의미(Context)'만 남은 상태
-        self.bottleneck = CBR(512, 1024)  # (512, 16, 16) -> (1024, 16, 16)
+        self.bottleneck = CBR(c4, c_bot)  # (256, 16, 16) -> (512, 16, 16)
 
         # --- Decoder (Upsampling Path) ---
         # Level 4 복원
-        self.up4 = nn.ConvTranspose2d(1024, 512, kernel_size=2, stride=2)  # 2배 확대
-        self.dec4 = CBR(1024, 512)  # Concat(512+512) -> 512
+        self.up4 = nn.ConvTranspose2d(c_bot, c4, kernel_size=2, stride=2)  # 2배 확대
+        self.dec4 = CBR(c_bot, c4)  # Concat(256+256) -> 256
 
         # Level 3 복원
-        self.up3 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
-        self.dec3 = CBR(512, 256)  # Concat(256+256) -> 256
+        self.up3 = nn.ConvTranspose2d(c4, c3, kernel_size=2, stride=2)
+        self.dec3 = CBR(c4, c3)  # Concat(128+128) -> 128
 
         # Level 2 복원
-        self.up2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
-        self.dec2 = CBR(256, 128)  # Concat(128+128) -> 128
+        self.up2 = nn.ConvTranspose2d(c3, c2, kernel_size=2, stride=2)
+        self.dec2 = CBR(c3, c2)  # Concat(64+64) -> 64
 
         # Level 1 복원 (최종 해상도)
-        self.up1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
-        self.dec1 = CBR(128, 64)  # Concat(64+64) -> 64
+        self.up1 = nn.ConvTranspose2d(c2, c1, kernel_size=2, stride=2)
+        self.dec1 = CBR(c2, c1)  # Concat(32+32) -> 32
 
         # --- Final Output ---
-        # 채널을 1개(dB값)로 줄임. (활성화 함수 없음: dB는 음수 가능)
-        self.final = nn.Conv2d(64, 1, kernel_size=1)
+        # 채널을 1개(dB값)로 줄임.
+        self.final = nn.Conv2d(c1, c_in, kernel_size=1)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         # === Encoder ===
@@ -137,6 +138,7 @@ class UNetDenoise(nn.Module):
 
         # Output
         output = self.final(d1)
+        output = self.sigmoid(output)
 
         return output
 
@@ -144,7 +146,7 @@ class UNetDenoise(nn.Module):
 # --- 모델 검증용 코드 ---
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = UNetDenoise().to(device)
+    model = UNet().to(device)
 
     # 더미 데이터 생성 (배치크기: 4, 채널: 1, 높이: 256, 너비: 256)
     dummy_input = torch.randn(4, 1, 256, 256).to(device)
