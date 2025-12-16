@@ -67,12 +67,8 @@ class UNet:
         # ==========================================
 
         # Layer 4 : 512 -> 256
-        self.up4 = ConvTransposed2d(
-            he_init(
-                c_bot * filter_size * filter_size, (c_bot, c4, filter_size, filter_size)
-            ),
-            torch.zeros(c4),
-        )
+        self.up4 = ConvTransposed2d(he_init(c_bot * filter_size * filter_size, (c_bot, c4, filter_size, filter_size)),
+                                    torch.zeros(c4), pad=1, output_pad=1)
         self.cat4 = Concat()
         # 입력 채널 = up(128) + skip(128) = 256
         self.dec4 = DoubleConv(2 * c4, c4, filter_size)
@@ -80,7 +76,7 @@ class UNet:
         # Layer 3 : 256 -> 128
         self.up3 = ConvTransposed2d(
             he_init(c4 * filter_size * filter_size, (c4, c3, filter_size, filter_size)),
-            torch.zeros(c3),
+            torch.zeros(c3), pad=1, output_pad=1
         )
         self.cat3 = Concat()
         self.dec3 = DoubleConv(2 * c3, c3, filter_size)
@@ -88,7 +84,7 @@ class UNet:
         # Layer 2 : 128 -> 64
         self.up2 = ConvTransposed2d(
             he_init(c3 * filter_size * filter_size, (c3, c2, filter_size, filter_size)),
-            torch.zeros(c2),
+            torch.zeros(c2), pad=1, output_pad=1
         )
         self.cat2 = Concat()
         self.dec2 = DoubleConv(2 * c2, c2, filter_size)
@@ -96,7 +92,7 @@ class UNet:
         # Layer 1 : 64 -> 32
         self.up1 = ConvTransposed2d(
             he_init(c2 * filter_size * filter_size, (c2, c1, filter_size, filter_size)),
-            torch.zeros(c1),
+            torch.zeros(c1), pad=1, output_pad=1
         )
         self.cat1 = Concat()
         self.dec1 = DoubleConv(2 * c1, c1, filter_size)

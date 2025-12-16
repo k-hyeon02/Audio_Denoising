@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-from unet_v3 import UNet
+from unet_v2 import UNet
 from utils import *
 from train_dataset.train_dataset import *
 

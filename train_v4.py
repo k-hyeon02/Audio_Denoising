@@ -12,8 +12,8 @@ from utils import *
 from train_dataset.train_dataset import NoiseRemovalDataset
 
 # 하이퍼파라미터 설정
-LR = 0.01
-EPOCHS = 30
+LR = 0.0001
+EPOCHS = 50
 BATCH_SIZE = 16  # 서버용 배치 사이즈
 
 # 경로 설정 (본인의 환경에 맞게 수정 필요)

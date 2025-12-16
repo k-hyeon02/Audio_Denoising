@@ -7,7 +7,7 @@ import os
 
 # 우리가 만든 모듈들 임포트
 from train_dataset.train_dataset import NoiseRemovalDataset
-from unet import UNetDenoise
+from unet_torch import UNetDenoise
 
 # --- 하이퍼파라미터 설정 (실험 조건) ---
 BATCH_SIZE = 8  # 한 번에 학습할 데이터 수 (메모리 부족 시 줄이세요: 8 or 4)

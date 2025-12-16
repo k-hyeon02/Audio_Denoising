@@ -6,7 +6,7 @@ from tqdm import tqdm
 import os
 import sys
 
-from unet_v2 import UNet
+from unet_v3 import UNet
 from layers import *
 from utils import *
 from train_dataset.train_dataset import NoiseRemovalDataset
