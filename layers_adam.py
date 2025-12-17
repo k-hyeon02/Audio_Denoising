@@ -15,13 +15,23 @@ class Conv2d:
         self.col_W = None
         self.x_shape = None
 
+        self.t = 0  # 타임 스텝
+        
+        # Weight에 대한 m, v (모양은 W와 동일)
+        self.m_W = torch.zeros_like(self.W)
+        self.v_W = torch.zeros_like(self.W)
+        
+        # Bias에 대한 m, v (모양은 b와 동일)
+        self.m_b = torch.zeros_like(self.b)
+        self.v_b = torch.zeros_like(self.b)
+
     def forward(self, x):
         FN, C, FH, FW = self.W.shape
         N, C, H, W = x.shape
         self.x_shape = x.shape  # for backward
 
         # 출력 크기 계산
-        out_h = (H + 2 * self.pad - FH) // self.stride + 1
+        out_h = (H + 2*self.pad - FH) // self.stride + 1
         out_w = (W + 2 * self.pad - FW) // self.stride + 1
 
         # im2col 실행
@@ -44,7 +54,7 @@ class Conv2d:
         # 출력 형태 복원 (feature map)
         # out : (N * out_h * out_w, FN)
         # -> (N, FN, out_h, out_w)
-        out = out.reshape(N, out_h, out_w, -1).permute(0, 3, 1, 2)
+        out = out.reshape(N, out_h, out_w, -1).permute(0,3,1,2)
 
         return out
 
@@ -54,7 +64,7 @@ class Conv2d:
         # 1. bias 기울기 : 채널별로 합산
         # dout shape : (N, FN, out_h, out_w) -> (N * out_h * out_w, FN)
         # ex) (1, 16, 256, 256) -> (1*256*256, 16)
-        dout = dout.permute(0, 2, 3, 1).reshape(-1, FN)
+        dout = dout.permute(0,2,3,1).reshape(-1, FN)
         self.db = torch.sum(dout, dim=0)  # (FN,) = (16,)
 
         # 2. Weight의 기울기 (행렬 곱)
@@ -82,13 +92,36 @@ class Conv2d:
 
         return dx
 
-    def step(self, lr):
-        self.W -= lr * self.dW
-        self.b -= lr * self.db
+    def step(self, lr, beta1=0.9, beta2=0.999, eps=1e-8):
+        # SGD
+        # self.W -= lr * self.dW
+        # self.b -= lr * self.db
+
+        # ----- Adam -----
+        self.t += 1
+
+        # 1) 1차 모멘트(m)
+        self.m_W = beta1 * self.m_W + (1 - beta1) * self.dW
+        self.m_b = beta1 * self.m_b + (1 - beta1) * self.db
+
+        # 2) 2차 모멘트(v)
+        self.v_W = beta2 * self.v_W + (1 - beta2) * (self.dW**2)
+        self.v_b = beta2 * self.v_b + (1 - beta2) * (self.db**2)
+
+        # 3) bias correction
+        m_W_hat = self.m_W / (1 - beta1**self.t)
+        v_W_hat = self.v_W / (1 - beta2**self.t)
+
+        m_b_hat = self.m_b / (1 - beta1**self.t)
+        v_b_hat = self.v_b / (1 - beta2**self.t)
+
+        # 4) 파라미터 업데이트
+        self.W -= lr * m_W_hat / (torch.sqrt(v_W_hat) + eps)
+        self.b -= lr * m_b_hat / (torch.sqrt(v_b_hat) + eps)
 
 
 class ConvTransposed2d:
-    def __init__(self, W, b, stride=2, pad=1, output_pad=1):
+    def __init__(self, W, b, stride=2, pad=0, output_pad=0):
         self.W = W
         self.b = b
         self.stride = stride
@@ -99,6 +132,16 @@ class ConvTransposed2d:
         self.x = None
         self.x_flat = None
         self.col_W = None
+
+        self.t = 0  # 타임 스텝
+
+        # Weight에 대한 m, v (모양은 W와 동일)
+        self.m_W = torch.zeros_like(self.W)
+        self.v_W = torch.zeros_like(self.W)
+
+        # Bias에 대한 m, v (모양은 b와 동일)
+        self.m_b = torch.zeros_like(self.b)
+        self.v_b = torch.zeros_like(self.b)
 
     def forward(self, x):
         # x shape : (N, C, H, W)
@@ -120,7 +163,7 @@ class ConvTransposed2d:
         col_W = self.W.reshape(C, -1)
 
         # x = (N, C, H, W) -> (N * H * W, C)
-        x_flat = x.permute(0, 2, 3, 1).reshape(-1, C)
+        x_flat = x.permute(0,2,3,1).reshape(-1, C)
         self.x_flat = x_flat  # for backward
 
         # 행렬 곱 : out = col_W @ x.T
@@ -141,11 +184,11 @@ class ConvTransposed2d:
         # out : (N, FN, OH, OW)
         N, FN, OH, OW = dout.shape
         C, FN, FH, FW = self.W.shape
-        N, C, H, W = self.x.shape
+        N, C, H ,W = self.x.shape
 
         # 1. db
         # (N, FN, OH, OW) -> (FN, N * OH * OW)
-        self.db = torch.sum(dout, dim=(0, 2, 3))
+        self.db = torch.sum(dout, dim=(0,2,3))
 
         # 2. dW
         # dout을 im2col로 전개
@@ -158,7 +201,7 @@ class ConvTransposed2d:
         # (C, N * H * W) @ (N * OH * OW, FN * FH * FW)
         # = (C, FN * FH * FW)
         dW_flat = torch.matmul(self.x_flat.T, col_dout)
-        self.dW = dW_flat.reshape(C, FN, FH, FW)  # 원래 모양으로 복구
+        self.dW = dW_flat.reshape(C, FN, FH, FW)  # 원래 모양으로 복구  
 
         # 3. dx
         # dx = col_dout @ W.T
@@ -175,9 +218,32 @@ class ConvTransposed2d:
 
         return dx
 
-    def step(self, lr):
-        self.W -= lr * self.dW
-        self.b -= lr * self.db
+    def step(self, lr, beta1=0.9, beta2=0.999, eps=1e-8):
+        # SGD
+        # self.W -= lr * self.dW
+        # self.b -= lr * self.db
+
+        # ----- Adam -----
+        self.t += 1
+
+        # 1) 1차 모멘트(m)
+        self.m_W = beta1 * self.m_W + (1 - beta1) * self.dW
+        self.m_b = beta1 * self.m_b + (1 - beta1) * self.db
+
+        # 2) 2차 모멘트(v)
+        self.v_W = beta2 * self.v_W + (1 - beta2) * (self.dW**2)
+        self.v_b = beta2 * self.v_b + (1 - beta2) * (self.db**2)
+
+        # 3) bias correction
+        m_W_hat = self.m_W / (1 - beta1**self.t)
+        v_W_hat = self.v_W / (1 - beta2**self.t)
+
+        m_b_hat = self.m_b / (1 - beta1**self.t)
+        v_b_hat = self.v_b / (1 - beta2**self.t)
+
+        # 4) 파라미터 업데이트
+        self.W -= lr * m_W_hat / (torch.sqrt(v_W_hat) + eps)
+        self.b -= lr * m_b_hat / (torch.sqrt(v_b_hat) + eps)
 
 
 class LeakyReLU:
@@ -213,7 +279,6 @@ class Concat:
     Skip Connection을 위해 채널 방향(dim=1)으로 데이터를 합치고,
     역전파 시 기울기를 분배하는 레이어
     """
-
     def __init__(self):
         self.split_idx = None
 
@@ -224,7 +289,7 @@ class Concat:
         # shape : (N, C1, H, W), (N, C2, H, W)
 
         self.split_idx = x1.shape[1]  # x1의 채널 수 저장
-        out = torch.cat([x1, x2], dim=1)  # 채널 방향으로 연결
+        out = torch.cat([x1, x2], dim=1)  # 채널 방향으로 연결 
 
         return out
 
@@ -244,7 +309,7 @@ class DoubleConv:
     (Conv -> LeakyReLU) * 2 구조를 하나의 레이어
     """
 
-    def __init__(self, in_ch, out_ch, f_size=3, mid_ch=None):
+    def __init__(self, in_ch, out_ch, f_size = 3, mid_ch=None):
         if mid_ch is None:
             mid_ch = out_ch
 
@@ -290,10 +355,10 @@ class DoubleConv:
         dout = self.conv1.backward(dout)
         return dout
 
-    def step(self, lr):
+    def step(self, lr, beta1=0.9, beta2=0.999, eps=1e-8):
         # 내부 컨볼루션 레이어들의 가중치 업데이트
-        self.conv1.step(lr)
-        self.conv2.step(lr)
+        self.conv1.step(lr, beta1, beta2, eps)
+        self.conv2.step(lr, beta1, beta2, eps)
 
 
 # sigmoid
@@ -305,7 +370,7 @@ class Sigmoid:
         # y = 1 / (1 + e^-x)
         self.out = 1 / (1 + torch.exp(-x))
         return self.out
-
+    
     def backward(self, dout):
         # sigmoid 미분 : y * (1 - y)
         dx = dout * self.out * (1.0 - self.out)
@@ -321,20 +386,18 @@ class MSELoss:
     def forward(self, y, t):
         self.diff = y - t
         self.N = y.numel()  # 전체 요소 개수
-        loss = torch.sum(self.diff ** 2) / self.N
+        loss = torch.sum(self.diff ** 2)/self.N
 
         return loss
-
+    
     def backward(self):
         # MSE 미분 : 2(y - t)/N
         dout = 2 * self.diff / self.N
-
-        return dout
-        return dout
-
-    # 손실함수 (L1 Loss)
+        
+        return dout 
 
 
+# 손실함수 (L1 Loss)
 # L1 = |y - t| / N
 class L1Loss:
     def __init__(self):

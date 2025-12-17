@@ -67,8 +67,10 @@ class UNet:
         # ==========================================
 
         # Layer 4 : 512 -> 256
-        self.up4 = ConvTransposed2d(he_init(c_bot * filter_size * filter_size, (c_bot, c4, filter_size, filter_size)),
-                                    torch.zeros(c4), pad=1, output_pad=1)
+        self.up4 = ConvTransposed2d(
+            he_init(c_bot * filter_size * filter_size, (c_bot, c4, filter_size, filter_size)),
+            torch.zeros(c4), pad=1, output_pad=1
+        )
         self.cat4 = Concat()
         # 입력 채널 = up(128) + skip(128) = 256
         self.dec4 = DoubleConv(2 * c4, c4, filter_size)

@@ -1,5 +1,5 @@
 import torch
-from layers import *
+from layers_adam import *
 
 UNET_CHANNELS = [1, 32, 64, 128, 256, 512]
 

@@ -7,7 +7,7 @@ import os
 import sys
 
 from unet_v4 import UNet
-from layers import *
+from layers_adam import *
 from utils import *
 from train_dataset.train_dataset import NoiseRemovalDataset
 
