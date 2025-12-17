@@ -233,3 +233,15 @@ class UNet:
         # 모든 하위 모듈의 가중치 갱신
         for module in self.modules:
             module.step(lr)
+
+
+if __name__ == "__main__":
+    model = UNet(filter_size=3)
+    x = torch.randn(2, 1, 256, 256)
+
+    y = model.forward(x)
+    print(f"Output shape: {y.shape}")
+
+    dout = torch.randn_like(y)
+    dx = model.backward(dout)
+    print(f"Gradient at input shape: {dx.shape}")

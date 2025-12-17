@@ -1,12 +1,18 @@
+import sys
+import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
 from torch.utils.data import Dataset
 import torch
 import torchaudio
 import glob
 import random
-import os
 
-from .audio_mixer import AudioMixer
-from .spectrogram import Spectrogram
+from audio_mixer import AudioMixer
+from spectrogram import Spectrogram
 
 
 class NoiseRemovalDataset(Dataset):
@@ -86,8 +92,8 @@ class NoiseRemovalDataset(Dataset):
 
 
 if __name__ == "__main__":
-    clean_dir = "./data/LibriSpeech/train-clean-100/"
-    noise_dir = "./data/noise_datasets/audio/"
+    clean_dir = "../data/LibriSpeech/train-clean-100/"
+    noise_dir = "../data/noise_datasets/audio/"
 
     import matplotlib.pyplot as plt
     from torch.utils.data import DataLoader
@@ -114,7 +120,7 @@ if __name__ == "__main__":
         # 검증 로직: (Batch, Channel, Freq, Time) = (4, 1, 256, 256) 이어야 함
         expected_shape = (BATCH_SIZE, 1, 256, 256)
         if mixed_batch.shape == expected_shape and clean_batch.shape == expected_shape:
-            print("Testing Dimensions... PASS (규격이 정확합니다)")
+            print("규격 일치")
         else:
             print(f"Testing Dimensions... FAIL (기대값: {expected_shape})")
 
