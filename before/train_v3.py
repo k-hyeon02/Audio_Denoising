@@ -13,35 +13,17 @@ from utils import *
 from train_dataset.train_data import NoiseRemovalDataset
 
 from torch.cuda.amp import autocast, GradScaler
-scaler = GradScaler()
+scaler = GradScaler(device_type='cuda')     # pytorch 2.2+ 버전
 
 # 하이퍼파라미터 설정
 LR = 0.0001
-EPOCHS = 50
-BATCH_SIZE = 10  # 서버용 배치 사이즈
+EPOCHS = 10
+BATCH_SIZE = 4  # 서버용 배치 사이즈
 
 # 경로 설정 (본인의 환경에 맞게 수정 필요)
 CLEAN_DIR = "./data/LibriSpeech/train-clean-100/"
 NOISE_DIR = "./data/noise_datasets/audio/"
-SAVE_DIR = "./saved"
-
-num_dirs = sum(
-    1 for f in os.listdir(SAVE_DIR)
-    if os.path.isdir(os.path.join(SAVE_DIR, f))
-)
-
-RUN_NUM = str(num_dirs)
-
-# 경로 구성
-RUN_DIR = os.path.join(SAVE_DIR, RUN_NUM)
-CHECK_DIR = os.path.join(RUN_DIR, "checkpoints")
-LOG_PATH = os.path.join(RUN_DIR, "training_log.csv")
-
-# 디렉토리 생성
-os.makedirs(CHECK_DIR, exist_ok=True)
-
-# 로그 파일 초기화
-init_log_file(LOG_PATH)
+SAVE_DIR = "./checkpoints/"
 
 device = get_device()
 
@@ -86,9 +68,9 @@ def train():
     # model을 device로 이동
 
     loss_func = F.l1_loss
-    
+
     # 로스 기록
-    history = {"train_loss": [], "val_loss": [], "train_psnr": [], "val_psnr": []}
+    # history = {"train_loss": [], "val_loss": [], "train_psnr": [], "val_psnr": []}
 
     # 3. epoch 반복
     for epoch in range(EPOCHS):
@@ -105,7 +87,7 @@ def train():
 
             optimizer.zero_grad(set_to_none=True)
 
-            with autocast():
+            with autocast(device_type='cuda'):
                 y = model(x)
                 loss = loss_func(y, t)
 
@@ -126,8 +108,8 @@ def train():
         avg_train_loss = train_loss_sum / len(train_loader)
         avg_train_psnr = train_psnr_sum / len(train_loader)
 
-        history["train_loss"].append(avg_train_loss)
-        history["train_psnr"].append(avg_train_psnr)
+        # history["train_loss"].append(avg_train_loss)
+        # history["train_psnr"].append(avg_train_psnr)
 
         # [Validation]
         model.eval()
@@ -138,10 +120,10 @@ def train():
             x = mixed.to(device, non_blocking=True)
             t = clean.to(device, non_blocking=True)
 
-            with autocast():
+            with autocast(device_type='cuda'):
                 y = model(x)
                 loss = loss_func(y, t)
-    
+
 
             val_loss_sum += loss.item()
             val_psnr_sum += psnr.item()
@@ -149,8 +131,8 @@ def train():
         avg_val_loss = val_loss_sum / len(val_loader)
         avg_val_psnr = val_psnr_sum / len(val_loader)
 
-        history["val_loss"].append(avg_val_loss)
-        history["val_psnr"].append(avg_val_psnr)
+        # history["val_loss"].append(avg_val_loss)
+        # history["val_psnr"].append(avg_val_psnr)
 
         print(
             f"Epoch {epoch+1} Result > "
@@ -159,16 +141,8 @@ def train():
         )
 
         # 5 epoch 마다 저장
-        log_epoch_metrics(
-            LOG_PATH,
-            epoch + 1,
-            avg_train_loss,
-            avg_val_loss,
-            avg_train_psnr,
-            avg_val_psnr
-        )
-
-        save_checkpoint(model, CHECK_DIR, f"checkpoint_{epoch+1}.pth")
+        
+        save_checkpoint(model, SAVE_DIR, f"checkpoint_{epoch+1}.pth")
 
     # # 4. loss 시각화
     # plt.plot(range(1, EPOCHS + 1), history["train_loss"], label="Train Loss")

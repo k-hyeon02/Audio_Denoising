@@ -6,14 +6,17 @@ import torch.optim as optim
 
 
 class DoubleConv(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1, pad=1, device=None):
+    def __init__(self, in_channels, out_channels, dropout_p=0, stride=1, pad=1, device=None):
         super().__init__()
         self.DC = nn.Sequential(
             Conv2d(in_channels, out_channels, stride=stride, pad=pad, device=device),
-            # BatchNorm(in_channels),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(),
+
+            nn.Dropout2d(dropout_p),
+
             Conv2d(out_channels, out_channels, stride=stride, pad=pad, device=device),
-            # BatchNorm(in_channels),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU()
         )
         self.skip = None
@@ -29,10 +32,10 @@ class DoubleConv(nn.Module):
 
 
 class Down(nn.Module):     # 내려오고 doubleconv 진행
-    def __init__(self, in_channels, out_channels, stride=1, pad=1, device=None):
+    def __init__(self, in_channels, out_channels, dropout_p=0, stride=1, pad=1, device=None):
         super().__init__()
         self.SConv = Conv2d(in_channels, out_channels, stride=2, pad=1, device=device)
-        self.DC = DoubleConv(out_channels, out_channels, stride=stride, pad=pad, device=device)
+        self.DC = DoubleConv(out_channels, out_channels, dropout_p=dropout_p, stride=stride, pad=pad, device=device)
 
     def forward(self, x):
         x = self.SConv.forward(x)
@@ -46,10 +49,10 @@ class Down(nn.Module):     # 내려오고 doubleconv 진행
     #     return dout
 
 class Up(nn.Module):       # 올라가고 doubleconv 진행
-    def __init__(self, in_channels, out_channels, stride=1, pad=1, device=None):
+    def __init__(self, in_channels, out_channels, dropout_p=0, stride=1, pad=1, device=None):
         super().__init__()
         self.TConv = ConvTranspose2d(in_channels, out_channels, stride=2, pad=1, device=device)
-        self.DC = DoubleConv(in_channels, out_channels, stride=1, pad=1, device=device)
+        self.DC = DoubleConv(in_channels, out_channels, dropout_p=dropout_p, stride=1, pad=1, device=device)
         self.sc = None
 
     def forward(self, x, sc):
@@ -78,13 +81,13 @@ class UNet(nn.Module):
             DoubleConv(channels[0], channels[1], device=device),
             Down(channels[1], channels[2], device=device),
             Down(channels[2], channels[3], device=device),
-            Down(channels[3], channels[4], device=device),
+            Down(channels[3], channels[4], dropout_p=0.1, device=device),
         ])
 
-        self.bottleneck = Down(channels[4], channels[5], device=device)
+        self.bottleneck = Down(channels[4], channels[5], dropout_p=0.2, device=device)
 
         self.U_up = nn.ModuleList([
-            Up(channels[5], channels[4], device=device),
+            Up(channels[5], channels[4], dropout_p=0.05, device=device),
             Up(channels[4], channels[3], device=device),
             Up(channels[3], channels[2], device=device),
             Up(channels[2], channels[1], device=device)

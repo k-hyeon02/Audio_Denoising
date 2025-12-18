@@ -16,9 +16,9 @@ from torch.cuda.amp import autocast, GradScaler
 scaler = GradScaler()
 
 # 하이퍼파라미터 설정
-LR = 0.0001
-EPOCHS = 50
-BATCH_SIZE = 10  # 서버용 배치 사이즈
+LR = 1e-4
+EPOCHS = 100
+BATCH_SIZE = 20  # 서버용 배치 사이즈
 
 # 경로 설정 (본인의 환경에 맞게 수정 필요)
 CLEAN_DIR = "./data/LibriSpeech/train-clean-100/"
@@ -87,6 +87,7 @@ def train():
 
     loss_func = F.l1_loss
     
+
     # 로스 기록
     history = {"train_loss": [], "val_loss": [], "train_psnr": [], "val_psnr": []}
 
@@ -107,7 +108,8 @@ def train():
 
             with autocast():
                 y = model(x)
-                loss = loss_func(y, t)
+                loss = 0.3 * F.l1_loss(y[:, :, :128, :], t[:, :, :128, :]) + 0.7 * F.l1_loss(y[:, :, 128:, :], t[:, :, 128:, :])
+
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -140,8 +142,8 @@ def train():
 
             with autocast():
                 y = model(x)
-                loss = loss_func(y, t)
-    
+                loss = 0.3 * F.l1_loss(y[:, :, :128, :], t[:, :, :128, :]) + 0.7 * F.l1_loss(y[:, :, 128:, :], t[:, :, 128:, :])
+                   
 
             val_loss_sum += loss.item()
             val_psnr_sum += psnr.item()
@@ -159,16 +161,18 @@ def train():
         )
 
         # 5 epoch 마다 저장
-        log_epoch_metrics(
-            LOG_PATH,
-            epoch + 1,
-            avg_train_loss,
-            avg_val_loss,
-            avg_train_psnr,
-            avg_val_psnr
-        )
+        if (epoch + 1) % 5 == 0:
 
-        save_checkpoint(model, CHECK_DIR, f"checkpoint_{epoch+1}.pth")
+            log_epoch_metrics(
+                LOG_PATH,
+                epoch + 1,
+                avg_train_loss,
+                avg_val_loss,
+                avg_train_psnr,
+                avg_val_psnr
+            )
+
+            save_checkpoint(model, CHECK_DIR, f"checkpoint_{epoch+1}.pth")
 
     # # 4. loss 시각화
     # plt.plot(range(1, EPOCHS + 1), history["train_loss"], label="Train Loss")

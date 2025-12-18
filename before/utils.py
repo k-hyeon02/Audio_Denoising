@@ -1,31 +1,6 @@
 import torch
 import numpy as np
 import os
-import csv
-
-def init_log_file(log_path):
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    with open(log_path, "w", newline="") as f:
-        f.write(
-            "epoch | train_loss | val_loss | train_psnr | val_psnr\n"
-        )
-
-def log_epoch_metrics(
-    log_path,
-    epoch,
-    train_loss,
-    val_loss,
-    train_psnr,
-    val_psnr
-):
-    with open(log_path, "a", newline="") as f:
-        f.write(
-            f"{epoch:03d} | "
-            f"{train_loss:.6f} | "
-            f"{val_loss:.6f} | "
-            f"{train_psnr:.2f} | "
-            f"{val_psnr:.2f}\n"
-        )
 
 def im2col(x, filter_h, filter_w, stride=1, pad=1):
     N, C, H, W = x.shape

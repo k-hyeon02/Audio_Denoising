@@ -16,9 +16,9 @@ from torch.cuda.amp import autocast, GradScaler
 scaler = GradScaler()
 
 # 하이퍼파라미터 설정
-LR = 0.0001
+LR = 1e-5
 EPOCHS = 50
-BATCH_SIZE = 10  # 서버용 배치 사이즈
+BATCH_SIZE = 9  # 서버용 배치 사이즈
 
 # 경로 설정 (본인의 환경에 맞게 수정 필요)
 CLEAN_DIR = "./data/LibriSpeech/train-clean-100/"
@@ -79,14 +79,15 @@ def train():
     print(f"Train Samples : {len(train_dataset)} | Val Samples : {len(val_dataset)}")
 
     # 2. 모델 생성
-    model = UNet(channels=[1, 32, 64, 128, 256, 512], device=device)
+    model = UNet(channels=[1, 64, 128, 256, 512, 1024], device=device)
     model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
     # model을 device로 이동
 
-    loss_func = F.l1_loss
-    
+    # loss_func = F.l1_loss
+
+
     # 로스 기록
     history = {"train_loss": [], "val_loss": [], "train_psnr": [], "val_psnr": []}
 
@@ -107,7 +108,8 @@ def train():
 
             with autocast():
                 y = model(x)
-                loss = loss_func(y, t)
+                loss = 0.7 * F.l1_loss(y, t) + 0.3 * fft2_loss(y, t)
+
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -140,8 +142,8 @@ def train():
 
             with autocast():
                 y = model(x)
-                loss = loss_func(y, t)
-    
+                loss = 0.7 * F.l1_loss(y, t) + 0.3 * fft2_loss(y, t)
+                   
 
             val_loss_sum += loss.item()
             val_psnr_sum += psnr.item()

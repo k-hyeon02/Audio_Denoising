@@ -79,14 +79,15 @@ def train():
     print(f"Train Samples : {len(train_dataset)} | Val Samples : {len(val_dataset)}")
 
     # 2. 모델 생성
-    model = UNet(channels=[1, 32, 64, 128, 256, 512], device=device)
+    model = UNet(channels=[1, 64, 128, 256, 512, 1024], device=device)
     model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
     # model을 device로 이동
 
-    loss_func = F.l1_loss
-    
+    # loss_func = F.l1_loss
+
+
     # 로스 기록
     history = {"train_loss": [], "val_loss": [], "train_psnr": [], "val_psnr": []}
 
@@ -107,7 +108,9 @@ def train():
 
             with autocast():
                 y = model(x)
-                loss = loss_func(y, t)
+                loss = stft_loss(y, t) + 0.5 * F.l1_loss(y, t)
+
+
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -140,8 +143,7 @@ def train():
 
             with autocast():
                 y = model(x)
-                loss = loss_func(y, t)
-    
+                loss = stft_loss(y, t) + 0.5 * F.l1_loss(y, t)
 
             val_loss_sum += loss.item()
             val_psnr_sum += psnr.item()
