@@ -1,8 +1,5 @@
-import torch
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
-import numpy as np
-import os
 import librosa
 import soundfile as sf
 
@@ -55,7 +52,7 @@ def load_custom_weights(model, checkpoint_path):
 
 
 # --- 오디오 변환 함수 ---
-def save_audio(magnitude, phase, save_path, n_fft=512, hop_length=160, sr = 16000):
+def convert_audio(magnitude, phase, n_fft=512, hop_length=160):
     # 데이터 타입 변경
     mag = magnitude.astype(np.float32)
     pha = phase.astype(np.float32)
@@ -73,9 +70,7 @@ def save_audio(magnitude, phase, save_path, n_fft=512, hop_length=160, sr = 1600
     # ISTFT
     audio = librosa.istft(stft_matrix, n_fft = n_fft, hop_length = hop_length)
 
-    # save audio
-    sf.write(save_path, audio, sr)
-    print(f"Saved : {save_path}")
+    return audio
 
 
 if __name__ == "__main__":
@@ -190,12 +185,29 @@ if __name__ == "__main__":
 
     # 오디오로 변환
     mixed_phase = mixed_phase.squeeze().numpy()
-    out_put_audio_noisy = save_audio(mixed_img, mixed_phase, "./output_noisy.wav")
-    output_audio_v2 = save_audio(output_img_v2, mixed_phase, "./output_v2.wav")
-    output_audio_v3 = save_audio(output_img_v3, mixed_phase, "./output_v3.wav")
-    output_audio_v4 = save_audio(output_img_v4, mixed_phase, "./output_v4.wav")
-    output_audio_torch = save_audio(output_img_torch, mixed_phase, "./output_torch.wav")
-    output_audio_clean = save_audio(target_img, mixed_phase, "./output_clean.wav")
+    output_audio_noisy = convert_audio(mixed_img, mixed_phase)
+    sf.write("./output_noisy.wav", output_audio_noisy, samplerate=16000)
+    print("Saved : output_noisy.wav")
+
+    output_audio_v2 = convert_audio(output_img_v2, mixed_phase)
+    sf.write("./output_v2.wav", output_audio_v2, samplerate=16000)
+    print("Saved : output_v2.wav")
+
+    output_audio_v3 = convert_audio(output_img_v3, mixed_phase)
+    sf.write("./output_v3.wav", output_audio_v3, samplerate=16000)
+    print("Saved : output_v3.wav")
+
+    output_audio_v4 = convert_audio(output_img_v4, mixed_phase)
+    sf.write("./output_v4.wav", output_audio_v4, samplerate=16000)
+    print("Saved : output_v4.wav")
+
+    output_audio_torch = convert_audio(output_img_torch, mixed_phase)
+    sf.write("./output_torch.wav", output_audio_torch, samplerate=16000)
+    print("Saved : output_torch.wav")
+
+    output_audio_clean = convert_audio(target_img, mixed_phase)
+    sf.write("./output_clean.wav", output_audio_clean, samplerate=16000)
+    print(f"Saved : {output_audio_clean}")
 
 
 
