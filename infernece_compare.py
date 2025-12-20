@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 import librosa
 import soundfile as sf
 
-from unet_v2 import UNet as UNet_v2
-from unet_v3 import UNet as UNet_v3
-from unet_v4 import UNet as UNet_v4
-from unet_torch import UNet as UNet_torch
+from models.unet_v2 import UNet as UNet_v2
+from models.unet_v3 import UNet as UNet_v3
+from models.unet_v4 import UNet as UNet_v4
+from models.unet_torch import UNet as UNet_torch
 from utils import *
-from train_dataset.train_dataset import *
+from mk_dataset.dataset import *
 
 
 # --- 가중치 로드 함수 ---
@@ -76,10 +76,10 @@ def convert_audio(magnitude, phase, n_fft=512, hop_length=160):
 if __name__ == "__main__":
     # 1. 설정 (경로 및 하이퍼파라미터)
     # 저장된 체크포인트 파일 경로
-    CHECKPOINT_PATH_2 = "./checkpoints_2/last_checkpoint.pth"
-    CHECKPOINT_PATH_3 = "./checkpoints_3/checkpoint_35.pth"
-    CHECKPOINT_PATH_4 = "./checkpoints_4/last_checkpoint.pth"
-    CHECKPOINT_PATH_TORCH = "./checkpoints_torch/last.pt"
+    CHECKPOINT_PATH_2 = "./checkpoints/v2/last_checkpoint.pth"
+    CHECKPOINT_PATH_3 = "./checkpoints/v3/checkpoint_35.pth"
+    CHECKPOINT_PATH_4 = "./checkpoints/v4/last_checkpoint.pth"
+    CHECKPOINT_PATH_TORCH = "./checkpoints/torch/last.pt"
 
     # 데이터 경로
     CLEAN_DIR = "./data/LibriSpeech/train-clean-100/"

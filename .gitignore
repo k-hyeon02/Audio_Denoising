@@ -10,7 +10,8 @@ __pycache__
 /checkpoints_2
 /checkpoints_3
 /checkpoints_4
-/checkpoints_torch
+/checkpoints/torch
 *.wav
 .idea/
 *.m4a
+/딥러닝_1조

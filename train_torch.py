@@ -1,27 +1,23 @@
-import torch
 from torch.utils.data import DataLoader
-import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-import os
-import sys
 import torch.nn as nn
 
-from unet_torch import UNet
+from models.unet_torch import UNet
 from utils import *
-from train_dataset.train_dataset import NoiseRemovalDataset
+from mk_dataset.dataset import NoiseRemovalDataset
 
 # 하이퍼파라미터 설정
 LR = 0.0001
 EPOCHS = 50
-BATCH_SIZE = 16  # 서버용 배치 사이즈
-NUM_WORKERS = 24
+BATCH_SIZE = 8  # 서버용 배치 사이즈
+NUM_WORKERS = 8
 
 
 # 경로 설정 (본인의 환경에 맞게 수정 필요)
 CLEAN_DIR = "./data/LibriSpeech/train-clean-100/"
 NOISE_DIR = "./data/noise_datasets/audio/"
-SAVE_DIR = "./checkpoints_torch/"
+SAVE_DIR = "./checkpoints/torch/"
 
 if torch.cuda.is_available():
     device = torch.device("cuda")

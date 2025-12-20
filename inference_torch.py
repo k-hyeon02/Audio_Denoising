@@ -1,15 +1,13 @@
 import torch
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
-import numpy as np
 import os
-import sys
 
-from unet_torch import UNet
+from models.unet_torch import UNet
 from train_dataset.train_dataset import NoiseRemovalDataset
 
 # --- 설정 (경로 및 하이퍼파라미터) ---
-CHECKPOINT_PATH = "./checkpoints_torch/last.pt"
+CHECKPOINT_PATH = "checkpoints/torch/last.pt"
 
 # 데이터 경로
 CLEAN_DIR = "./data/LibriSpeech/train-clean-100/"

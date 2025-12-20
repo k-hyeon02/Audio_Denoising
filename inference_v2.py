@@ -1,12 +1,9 @@
-import torch
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
-import numpy as np
-import os
 
-from unet_v2 import UNet
+from models.unet_v2 import UNet
 from utils import *
-from train_dataset.train_dataset import *
+from mk_dataset.dataset import *
 
 
 # --- 가중치 로드 함수 ---
@@ -53,14 +50,14 @@ def load_custom_weights(model, checkpoint_path):
 if __name__ == "__main__":
     # 1. 설정 (경로 및 하이퍼파라미터)
     # 저장된 체크포인트 파일 경로
-    CHECKPOINT_PATH = "./checkpoints_2/last_checkpoint.pth"
+    CHECKPOINT_PATH = "./checkpoints/v2/last_checkpoint.pth"
 
     # 데이터 경로
     CLEAN_DIR = "./data/LibriSpeech/train-clean-100/"
     NOISE_DIR = "./data/noise_datasets/audio/"
 
     # 모델 설정 (학습 때와 동일해야 함)
-    CHANNELS = [1, 16, 32, 64, 128, 256]
+    CHANNELS = [1, 32, 64, 128, 256, 512]
     FILTER_SIZE = 3
 
     # 2. 데이터셋 및 모델 준비
