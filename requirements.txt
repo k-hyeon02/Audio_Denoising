@@ -1,0 +1,16 @@
+# Deep Learning Core
+# python version : 3.11.14
+torch==2.5.1
+torchaudio==2.5.1
+tqdm
+
+# Audio Processing & Data Loading
+librosa
+soundfile
+soundata
+
+# Visualization
+matplotlib
+
+# Jupyter Notebook (for audio_inference.ipynb)
+jupyter

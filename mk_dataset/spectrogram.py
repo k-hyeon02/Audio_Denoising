@@ -4,7 +4,6 @@ import torchaudio.transforms as T
 import librosa
 import random
 import matplotlib.pyplot as plt
-from audio_mixer import AudioMixer
 
 # 16000Hz에서 25ms = 400 < 512 = n_fft 로 설정
 # 이동 간격 : hop_length = 160 : 16000Hz에서 10ms, 데이터 길이가 40,800이므로 총 0~255 프레임의 시간축 생성
@@ -38,7 +37,7 @@ class Spectrogram:
 
         return dB_melspec
 
-    def plot(self, dB_spec, ax, title):
+    def plot(self, dB_spec, title):
         spec_visualize = dB_spec[0].numpy()
         img = librosa.display.specshow(
             spec_visualize,
@@ -46,21 +45,23 @@ class Spectrogram:
             hop_length=self.hop_length,
             x_axis="time",
             y_axis="linear",
-            ax=ax,
-            cmap="magma"
+            cmap="coolwarm"
         )
-        ax.set_title(title)
+        plt.title(title)
 
         return img
 
 
 if __name__ == "__main__":
+
+    from audio_mixer import AudioMixer
+
     # 1. 데이터 로드
-    clean_path = "./data/LibriSpeech/train-clean-100/19/198/19-198-0000.flac"
+    clean_path = "../data/LibriSpeech/train-clean-100/19/198/19-198-0000.flac"
 
     clean_wave, clean_rate = torchaudio.load(clean_path)
 
-    noise_path = "./data/noise_datasets/audio/fold1/7061-6-0-0.wav"
+    noise_path = "../data/noise_datasets/audio/fold1/7061-6-0-0.wav"
     noise_wave, noise_rate = torchaudio.load(noise_path)
 
     # 2. AudioMixer 인스턴스 생성
@@ -76,15 +77,14 @@ if __name__ == "__main__":
     # 4. Spectrogram 인스턴스 생성
     spec = Spectrogram()
 
-    fig, axes = plt.subplots(nrows=1, ncols=2)
     plt.tight_layout()
 
-    clean_dB_spec = spec.to_spec(clean_segment)
-    img_clean = spec.plot(clean_dB_spec, axes[0], title='Clean Segment')
-    fig.colorbar(img_clean, ax=axes[0], format='%+2.0f dB') 
+    clean_dB_spec, _ = spec.to_spec(clean_segment)
+    img_clean = spec.plot(clean_dB_spec, title='Clean Segment')
+    plt.colorbar(format="%+2.0f dB")
+    plt.show()
 
-    mixed_dB_spec = spec.to_spec(mixed_audio)
-    img_mixed = spec.plot(mixed_dB_spec, axes[1], title="Mixed Audio")
-    fig.colorbar(img_mixed, ax=axes[1], format="%+2.0f dB")  
-
+    mixed_dB_spec, _ = spec.to_spec(mixed_audio)
+    img_mixed = spec.plot(mixed_dB_spec, title="Mixed Audio")
+    plt.colorbar(format="%+2.0f dB")
     plt.show()

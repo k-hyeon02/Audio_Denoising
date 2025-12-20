@@ -1,14 +1,22 @@
+import sys
+import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
 from torch.utils.data import Dataset
+import torch
 import torchaudio
 import glob
 import random
-import os
-import audio_mixer as A
-import spectrogram as S
+
+from audio_mixer import AudioMixer
+from spectrogram import Spectrogram
 
 
 class NoiseRemovalDataset(Dataset):
-    def __init__(self, clean_dir, noise_dir, mode='train', split_ratio = 0.8, 
+    def __init__(self, clean_dir, noise_dir, mode='train', split_ratio = 0.8,
                  target_frame=256, hop_length=160):
 
         self.mode = mode
@@ -17,6 +25,7 @@ class NoiseRemovalDataset(Dataset):
         all_clean_files = sorted(
             glob.glob(os.path.join(clean_dir, "**/*.flac"), recursive=True)
         )
+        # noise는 전체 공유
         self.noise_files = sorted(
             glob.glob(os.path.join(noise_dir, "**/*.wav"), recursive=True)
         )
@@ -33,26 +42,23 @@ class NoiseRemovalDataset(Dataset):
         elif mode == 'val':
             self.clean_files = all_clean_files[split_point:]  # 뒷부분 20%
         else:
-            print("mode는 'train'/'val' 이어야 함")
-
-        # noise는 전체 공유
-        self.noise_files = sorted(
-            glob.glob(os.path.join(noise_dir, "**/*.wav"), recursive=True)
-        )
+            raise ValueError("mode는 'train'/'val' 이어야 함")
 
         # 도구(Tools) 초기화
-        self.mixer = A.AudioMixer(target_frame=target_frame, hop_length=hop_length)
-        self.spec_processor = S.Spectrogram(n_fft=512, hop_length=hop_length)
+        self.mixer = AudioMixer(target_frame=target_frame, hop_length=hop_length)
+        self.spec_processor = Spectrogram(n_fft=512, hop_length=hop_length)
 
     def __len__(self):
         # 전체 학습 데이터 수 (클린 파일 개수 기준)
         return len(self.clean_files)
-    
-    def normalize(self, tensor):
-        min_val = tensor.min()
-        max_val = tensor.max()
 
-        norm_tensor = (tensor - min_val) / (max_val - min_val + 1e-8)
+    # 인간 가청 영역 : -60dB ~ 0dB
+    def normalize(self, tensor):
+        tensor = torch.clamp(tensor, min=-80.0, max=0.0)
+
+        # 0~1 스케일로 변환
+        norm_tensor = (tensor + 80.0) / 80.0
+
         return norm_tensor
 
     def __getitem__(self, idx):
@@ -114,7 +120,7 @@ if __name__ == "__main__":
         # 검증 로직: (Batch, Channel, Freq, Time) = (4, 1, 256, 256) 이어야 함
         expected_shape = (BATCH_SIZE, 1, 256, 256)
         if mixed_batch.shape == expected_shape and clean_batch.shape == expected_shape:
-            print("Testing Dimensions... PASS (규격이 정확합니다)")
+            print("규격 일치")
         else:
             print(f"Testing Dimensions... FAIL (기대값: {expected_shape})")
 
